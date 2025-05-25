@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Profile Setup - Companio</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <h2>Travel Profile Setup</h2>
+    <!-- templates/profile-setup.html -->
+<form id="profileForm" enctype="multipart/form-data">
+  <input type="text" name="name" placeholder="Name" required />
+  <select name="gender">
+    <option value="Male">Male</option>
+    <option value="Female">Female</option>
+  </select>
+  <input type="text" name="destination" placeholder="Destination" required />
+  <input type="date" name="travelStart" required />
+  <input type="date" name="travelEnd" required />
+  <input type="text" name="interests" placeholder="Interests (comma-separated)" required />
+  <input type="file" name="photo" accept="image/*" required />
+  <button type="submit">Submit Profile</button>
+</form>
+
+<script>
+  document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const userId = localStorage.getItem('userId');
+    if (!userId) return alert('User ID missing');
+
+    formData.append('userId', userId);
+
+    const res = await fetch('/profile', {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await res.json();
+    if (res.ok) {
+      alert('Profile setup complete!');
+      window.location.href = '/dashboard'; // redirect to dashboard
+    } else {
+      alert(result.message || 'Profile setup failed');
+    }
+  });
+</script>
+
+</body>
+</html>

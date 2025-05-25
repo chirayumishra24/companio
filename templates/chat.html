@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+  <h2 class="text-xl font-bold mb-4">Chat</h2>
+  <div id="chatBox" class="border h-64 p-3 overflow-y-auto mb-4 bg-gray-100 rounded"></div>
+
+  <div class="flex">
+    <input id="messageInput" type="text" placeholder="Type a message..." class="flex-1 border px-2 py-1 rounded mr-2" />
+    <button id="sendBtn" class="bg-blue-500 text-white px-4 py-1 rounded">Send</button>
+  </div>
+
+  <script>
+    const socket = io();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const receiverId = urlParams.get("with");
+    const senderId = localStorage.getItem("userId");
+
+    socket.emit("register", senderId);
+
+    const chatBox = document.getElementById("chatBox");
+    const input = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    sendBtn.addEventListener("click", () => {
+      const text = input.value;
+      if (!text.trim()) return;
+
+      socket.emit("private message", { senderId, receiverId, text });
+      appendMessage(`You: ${text}`);
+      input.value = "";
+    });
+
+    socket.on("private message", ({ senderId, text }) => {
+      appendMessage(`Them: ${text}`);
+    });
+
+    function appendMessage(message) {
+      const msgEl = document.createElement("p");
+      msgEl.textContent = message;
+      chatBox.appendChild(msgEl);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  </script>
+</body>
+</html>

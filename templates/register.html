@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Companio – Register</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>👋 Create Your Companio Profile</h1>
+    <form id="registerForm">
+      <input type="text" name="name" placeholder="Your Name" required />
+      
+      <select name="gender" required>
+        <option value="" disabled selected>Select Gender</option>
+        <option>Male</option>
+        <option>Female</option>
+        <option>Other</option>
+      </select>
+      
+      <input type="text" name="destination" placeholder="Your Destination" required />
+      
+      <label>Travel Dates:</label>
+      <input type="date" name="travelStart" required />
+      <input type="date" name="travelEnd" required />
+      
+      <input type="text" name="interests" placeholder="Interests (comma-separated)" required />
+      
+      <div id="camera-section">
+        <video id="video" autoplay></video>
+        <button type="button" id="snap">Capture Photo</button>
+        <canvas id="canvas" style="display:none;"></canvas>
+      </div>
+      
+      <input type="hidden" name="photo" id="photoInput" />
+
+      <button type="submit">Register</button>
+    </form>
+  </div>
+
+  <script src="/js/form.js"></script>
+</body>
+</html>
