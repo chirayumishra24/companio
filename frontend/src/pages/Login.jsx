@@ -1,23 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { API_BASE, setToken } from '../lib/config';
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const token = params.get('token');
+        if (token) {
+            setToken(token);
+            navigate('/matches', { replace: true });
+        }
+        const oauthError = params.get('error');
+        if (oauthError) {
+            setError('Google login is not configured or failed on server.');
+        }
+    }, [location.search, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
         try {
-            const response = await axios.post('http://localhost:3000/auth/login', {
+            const response = await axios.post(`${API_BASE}/auth/login`, {
                 email, password
             });
 
-            localStorage.setItem('token', response.data.token);
+            setToken(response.data.token);
             if (response.data.profileSetupComplete) {
                 navigate('/matches');
             } else {
@@ -29,7 +44,7 @@ export default function Login() {
     };
 
     const handleGoogleLogin = () => {
-        window.location.href = 'http://localhost:3000/auth/google';
+        window.location.href = `${API_BASE}/auth/google`;
     };
 
     return (

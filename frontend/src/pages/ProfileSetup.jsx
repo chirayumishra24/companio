@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE, authHeaders, getToken, setToken } from '../lib/config';
 
 export default function ProfileSetup() {
     const [formData, setFormData] = useState({
@@ -14,6 +15,15 @@ export default function ProfileSetup() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
+    React.useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tokenFromQuery = params.get("token");
+        if (tokenFromQuery) {
+            setToken(tokenFromQuery);
+            window.history.replaceState({}, "", "/profile-setup");
+        }
+    }, []);
+
     const handleInputChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
@@ -25,7 +35,7 @@ export default function ProfileSetup() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        const token = localStorage.getItem('token');
+        const token = getToken();
 
         if (!token) return navigate('/login');
 
@@ -37,9 +47,9 @@ export default function ProfileSetup() {
         }
 
         try {
-            await axios.post('http://localhost:3000/auth/profile-setup', data, {
+            await axios.post(`${API_BASE}/auth/profile-setup`, data, {
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    ...authHeaders(),
                     'Content-Type': 'multipart/form-data'
                 }
             });

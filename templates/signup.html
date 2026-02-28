@@ -68,7 +68,7 @@
 
     async function redirectAfterLogin(token) {
       try {
-        localStorage.setItem('token', token);
+        sessionStorage.setItem('token', token);
         const res = await fetch('/api/profile', {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -135,7 +135,7 @@
         redirectAfterLogin(googleToken);
       }
 
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       const isLoginPage = window.location.pathname.includes("login");
       const isSignupPage = window.location.pathname.includes("signup");
 

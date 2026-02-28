@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE, authHeaders, assetUrl, getToken } from '../lib/config';
 
 export default function Matches() {
     const [matches, setMatches] = useState([]);
@@ -10,11 +11,14 @@ export default function Matches() {
     useEffect(() => {
         const fetchMatches = async () => {
             try {
-                const token = localStorage.getItem('token');
-                if (!token) return navigate('/login');
+                const token = getToken();
+                if (!token) {
+                    navigate('/login');
+                    return;
+                }
 
-                const response = await axios.get('http://localhost:3000/api/matches', {
-                    headers: { Authorization: `Bearer ${token}` }
+                const response = await axios.get(`${API_BASE}/api/matches`, {
+                    headers: authHeaders()
                 });
                 setMatches(response.data);
             } catch (error) {
@@ -42,10 +46,10 @@ export default function Matches() {
                 <header className="flex justify-between items-end border-b-8 border-black pb-6 mb-12">
                     <h1 className="text-6xl font-black tracking-tighter uppercase">Your Matches</h1>
                     <button
-                        onClick={() => navigate('/itinerary/create')}
+                        onClick={() => navigate('/profile-setup')}
                         className="neo-btn bg-brutal-cyan text-xl"
                     >
-                        + New Trip
+                        + Complete Profile
                     </button>
                 </header>
 
@@ -62,7 +66,7 @@ export default function Matches() {
                             <div key={match._id} className={`neo-card transform hover:-translate-y-2 transition-transform ${idx % 2 === 0 ? 'bg-brutal-yellow rotate-1' : 'bg-white -rotate-1'}`}>
                                 {match.photos && match.photos.length > 0 ? (
                                     <img
-                                        src={`http://localhost:3000/${match.photos[0]}`}
+                                        src={assetUrl(match.profilePhoto || `/uploads/${match.photos[0]}`)}
                                         alt={match.firstName}
                                         className="w-full h-48 object-cover border-4 border-black mb-4"
                                     />
@@ -89,7 +93,7 @@ export default function Matches() {
 
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() => navigate(`/profile/${match._id}`)}
+                                        onClick={() => navigate(`/messages/${match._id}`)}
                                         className="neo-btn bg-white hover:bg-gray-100 flex-1 py-2 text-sm"
                                     >
                                         VIEW

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import { API_BASE, setToken } from '../lib/config';
 
 export default function Signup() {
     const [email, setEmail] = useState('');
@@ -18,11 +19,11 @@ export default function Signup() {
         }
 
         try {
-            const response = await axios.post('http://localhost:3000/auth/signup', {
+            const response = await axios.post(`${API_BASE}/auth/signup`, {
                 email, password
             });
 
-            localStorage.setItem('token', response.data.token);
+            setToken(response.data.token);
             navigate('/profile-setup');
         } catch (err) {
             setError(err.response?.data?.message || 'Signup failed. Please try again.');
@@ -30,7 +31,7 @@ export default function Signup() {
     };
 
     const handleGoogleLogin = () => {
-        window.location.href = 'http://localhost:3000/auth/google';
+        window.location.href = `${API_BASE}/auth/google`;
     };
 
     return (

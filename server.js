@@ -2,12 +2,12 @@ import express from "express";
 import path from "path";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import bodyParser from "body-parser";
 import cors from "cors";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import crypto from "crypto";
 import session from "express-session";
 import passport from "passport";
 import dotenv from "dotenv";
@@ -17,7 +17,7 @@ import rateLimit from 'express-rate-limit';
 import Joi from "joi";
 
 // Schemas
-import "./passport.js"; // OAuth config
+import { isGoogleOAuthConfigured } from "./passport.js";
 import Itinerary from "./models/Itinerary.js";
 import User from './models/User.js';
 import Review from "./models/Review.js";
@@ -25,62 +25,154 @@ import Message from "./models/message.js";
 import Profile from "./models/profile.js";
 dotenv.config();
 const app = express();
-const PORT = 3000;
-const JWT_SECRET = "e6ed40b0e717e6bf7326163fa6f2d7d56619e4f33a395849713d550777cdf52e";
+const PORT = Number(process.env.PORT || 3000);
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString("hex");
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString("hex");
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/companio";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+if (!process.env.JWT_SECRET) console.warn("⚠️ JWT_SECRET missing. Using runtime-generated secret.");
+if (!process.env.SESSION_SECRET) console.warn("⚠️ SESSION_SECRET missing. Using runtime-generated secret.");
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, "uploads");
+const frontendDistDir = path.join(__dirname, "frontend", "dist");
+const hasFrontendDist = fs.existsSync(frontendDistDir);
+
+const HTML_ESCAPE_MAP = Object.freeze({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "\"": "&quot;",
+  "'": "&#39;",
+  "`": "&#96;",
+});
+
+function sanitizeText(value) {
+  if (typeof value !== "string") return "";
+  return value
+    .trim()
+    .replace(/[&<>"'`]/g, (char) => HTML_ESCAPE_MAP[char]);
+}
+
+function sanitizeCsvToArray(value) {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeText).filter(Boolean);
+  }
+  if (typeof value !== "string") return [];
+  return value.split(",").map((item) => sanitizeText(item)).filter(Boolean);
+}
+
+function normalizeExternalUrl(value) {
+  const clean = sanitizeText(value);
+  if (!clean) return "";
+  if (clean.startsWith("@")) return clean;
+  try {
+    const parsed = new URL(clean);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function sanitizeFilename(value) {
+  if (typeof value !== "string") return "";
+  const file = path.basename(value).trim();
+  if (!file || file.includes("..") || file.includes("/") || file.includes("\\")) return "";
+  return file;
+}
+
+function isSelfRequest(req, userId) {
+  return String(req.user?.userId || "") === String(userId || "");
+}
+
+function userRoom(email) {
+  return `user:${email}`;
+}
+
+function frontendRedirectUrl(originalUrl) {
+  return `${FRONTEND_URL}${originalUrl || "/"}`;
+}
+
+function serveFrontendEntry(req, res) {
+  if (hasFrontendDist) {
+    return res.sendFile(path.join(frontendDistDir, "index.html"));
+  }
+  return res.redirect(frontendRedirectUrl(req.originalUrl));
+}
+
+async function areUsersMatched(emailA, emailB) {
+  const first = await User.findOne({ email: emailA });
+  if (!first) return false;
+  return Array.isArray(first.matches) && first.matches.includes(emailB);
+}
 // MongoDB Connection
-mongoose.connect("mongodb://127.0.0.1:27017/companio", {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => console.log("✅ MongoDB connected"))
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use("/static", express.static(path.join(__dirname, "static")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(uploadsDir));
+if (hasFrontendDist) {
+  app.use(express.static(frontendDistDir));
+}
 app.use((err, req, res, next) => {
   console.error("Server Error:", err.stack);
   res.status(500).json({ message: "Something went wrong!" });
 });
-app.use(session({ secret: "your_session_secret", resave: false, saveUninitialized: false }));
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  },
+}));
 app.use(passport.initialize());
 app.use(passport.session());
-// Static Routes
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "templates", "index.html")));
-app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "templates", "login.html")));
-app.get("/signup", (req, res) => res.sendFile(path.join(__dirname, "templates", "signup.html")));
-app.get("/matches", (req, res) => res.sendFile(path.join(__dirname, "templates", "matches.html")));
-app.get("/profile-setup", (req, res) => res.sendFile(path.join(__dirname, "templates", "profile-setup.html")));
-app.get("/set-password", (req, res) => {
-  res.sendFile(path.join(__dirname, "templates", "set-password.html"))
-});
-app.get("/itinerary-form", (req, res) => {
-  res.sendFile(path.join(__dirname, "templates", "itinerary-form.html"))
-});
-app.get("/profile", (req, res) => {
-  res.sendFile(path.join(__dirname, "templates", "profile.html"))
-});
-app.get("/messages", (req, res) => {
-  res.sendFile(path.join(__dirname, "templates", "messages.html"));
-});
-app.get("/matches-list", (req, res) => {
-  res.sendFile(path.join(__dirname, "templates", "matches-list.html"));
-});
-app.get("/view-profile", (req, res) => {
-  res.sendFile(path.join(__dirname, "templates", "viewProfile.html"));
-});
+
+// Frontend app routes
+app.get([
+  "/",
+  "/login",
+  "/signup",
+  "/matches",
+  "/profile-setup",
+  "/set-password",
+  "/itinerary-form",
+  "/profile",
+  "/messages",
+  "/matches-list",
+  "/view-profile",
+], serveFrontendEntry);
 
 // Google OAuth
-app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+app.get("/auth/google", (req, res, next) => {
+  if (!isGoogleOAuthConfigured) {
+    return res.status(503).json({ message: "Google OAuth is not configured on this server." });
+  }
+  return passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+});
 app.get("/auth/logout", (req, res) => {
-  req.logout(() => res.redirect("http://localhost:5175/login"));
+  req.logout(() => res.redirect(`${FRONTEND_URL}/login`));
 });
 app.get("/auth/google/callback",
+  (req, res, next) => {
+    if (!isGoogleOAuthConfigured) {
+      return res.redirect(`${FRONTEND_URL}/login?error=oauth_not_configured`);
+    }
+    return next();
+  },
   passport.authenticate("google", {
-    failureRedirect: "/login",
+    failureRedirect: `${FRONTEND_URL}/login`,
     session: false
   }),
   async (req, res) => {
@@ -93,22 +185,22 @@ app.get("/auth/google/callback",
     const profile = await Profile.findOne({ email: req.user.email });
 
     if (!req.user.passwordHash) {
-      return res.redirect(`http://localhost:5175/set-password?token=${token}`);
+      return res.redirect(`${FRONTEND_URL}/set-password?token=${token}`);
     }
 
     if (!profile) {
-      return res.redirect(`http://localhost:5175/profile-setup?token=${token}`);
+      return res.redirect(`${FRONTEND_URL}/profile-setup?token=${token}`);
     }
 
     // ✅ Redirect to matches with token
-    res.redirect(`http://localhost:5175/matches?token=${token}`);
+    res.redirect(`${FRONTEND_URL}/matches?token=${token}`);
   }
 );
 
 app.get('/login-success', (req, res) => {
   const token = req.query.token;
-  if (token) return res.redirect(`http://localhost:5175/login?token=${token}`);
-  return res.redirect('http://localhost:5175/login?error=missing_token');
+  if (token) return res.redirect(`${FRONTEND_URL}/login?token=${token}`);
+  return res.redirect(`${FRONTEND_URL}/login?error=missing_token`);
 });
 // JWT Middleware (updated with better logging)
 function authenticateToken(req, res, next) {
@@ -145,16 +237,18 @@ const authLimiter = rateLimit({
 });
 app.use("/auth", authLimiter);
 
-const signupSchema = Joi.object({
-  email: Joi.string().email().required(),
-  password: Joi.string().min(6).required(),
-});
-
 // ✅ Auth: Signup
 app.post('/auth/signup', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: "Email and password are required." });
+    const schema = Joi.object({
+      email: Joi.string().email().required(),
+      password: Joi.string().min(8).required(),
+    });
+    const { value, error } = schema.validate(req.body || {}, { stripUnknown: true });
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    const email = value.email.toLowerCase().trim();
+    const password = value.password;
     const existing = await User.findOne({ email });
     if (existing && existing.passwordHash) {
       return res.status(400).json({ message: 'User already exists' });
@@ -177,7 +271,8 @@ app.post('/auth/signup', async (req, res) => {
 // ✅ Auth: Login
 app.post('/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = sanitizeText(req.body?.email).toLowerCase();
+    const password = String(req.body?.password || "");
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required." });
     }
@@ -189,7 +284,12 @@ app.post('/auth/login', async (req, res) => {
 
     if (!user.passwordHash) {
       return res.status(400).json({
-        message: "This account doesn't have a password set. Please log in using Google first or set a password."
+        message: "This account uses Google sign-in. Continue with Google to access or set a password."
+      });
+    }
+    if (user.passwordHash === "GOOGLE_AUTH") {
+      return res.status(400).json({
+        message: "This account uses Google sign-in. Continue with Google to access or set a password."
       });
     }
 
@@ -220,27 +320,20 @@ app.post('/auth/login', async (req, res) => {
 // ✅ Set/Update Password for Google Users
 app.post("/auth/set-password", authenticateToken, async (req, res) => {
   try {
-    const { password } = req.body;
-    if (!password) return res.status(400).json({ message: "Password is required" });
+    const password = String(req.body?.password || "");
+    if (!password || password.length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters long." });
+    }
     const user = await User.findOne({ email: req.user.email });
     if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.passwordHash && user.passwordHash !== "GOOGLE_AUTH") {
+      return res.status(400).json({ message: "Password is already set. Use a dedicated change-password flow." });
+    }
     user.passwordHash = await bcrypt.hash(password, 10);
     await user.save();
     res.status(200).json({ message: "Password set successfully" });
   } catch (err) {
     console.error("Set password error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-app.post('/auth/get-token', async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
-    const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '15m' });
-    res.status(200).json({ token });
-  } catch (err) {
-    console.error("Token generation error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -265,9 +358,8 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
 // 🧾 Save or Update Profile
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, "uploads");
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -278,7 +370,7 @@ const upload = multer({ storage });
 app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), async (req, res) => {
   try {
     const {
-      firstName,
+      firstName = "",
       dob_day = "01",
       dob_month = "01",
       dob_year = "2000",
@@ -301,24 +393,24 @@ app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), 
 
     // ✅ Handle social links from form fields like: socialLinks[instagram]
     const socialLinks = {
-      instagram: req.body["socialLinks[instagram]"] || "",
-      linkedin: req.body["socialLinks[linkedin]"] || ""
+      instagram: normalizeExternalUrl(req.body["socialLinks[instagram]"] || ""),
+      linkedin: normalizeExternalUrl(req.body["socialLinks[linkedin]"] || "")
     };
 
     // Final profile data
     const profileData = {
       userId: req.user.userId,
       email,
-      firstName,
+      firstName: sanitizeText(firstName),
       dob,
-      gender,
+      gender: sanitizeText(gender),
       showGender: showGender === "on" || showGender === true,
-      interestedIn,
-      travelType,
-      interests: Array.isArray(interests) ? interests : interests.split(',').map(s => s.trim()),
+      interestedIn: sanitizeText(interestedIn),
+      travelType: sanitizeText(travelType),
+      interests: sanitizeCsvToArray(interests),
       photos,
-      bio,
-      location,
+      bio: sanitizeText(bio),
+      location: sanitizeText(location),
       socialLinks
     };
 
@@ -339,26 +431,25 @@ app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), 
   }
 });
 app.post('/itinerary/create', authenticateToken, async (req, res) => {
-  const profile = await Profile.findOne({ email: req.user.email });
-  const { destination, description, startDate, endDate, interests } = req.body;
-  const itinerary = new Itinerary({
-    user: profile._id,
-    destination,
-    description,
-    startDate,
-    endDate,
-    interests: interests.split(',').map(i => i.trim()),
-  });
-  await itinerary.save();
-  res.redirect('/itineraries');
-});
-app.get('/itinerary-form', authenticateToken, async (req, res) => {
-  const query = {};
-  if (req.query.destination) {
-    query.destination = new RegExp(req.query.destination, 'i'); // Case-insensitive search
+  try {
+    const profile = await Profile.findOne({ email: req.user.email });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    const { destination, description, startDate, endDate, interests } = req.body;
+    const itinerary = new Itinerary({
+      user: profile._id,
+      destination: sanitizeText(destination),
+      description: sanitizeText(description),
+      startDate,
+      endDate,
+      interests: sanitizeCsvToArray(interests),
+    });
+    await itinerary.save();
+    res.redirect('/itineraries');
+  } catch (err) {
+    console.error("Itinerary create error:", err);
+    res.status(500).json({ message: "Server error" });
   }
-  const allItineraries = await Itinerary.find(query).populate('user');
-  res.render('itinerary-form.html', { itineraries: allItineraries });
 });
 app.post('/api/itinerary', authenticateToken, async (req, res) => {
   try {
@@ -367,13 +458,13 @@ app.post('/api/itinerary', authenticateToken, async (req, res) => {
     const { destination, startDate, endDate, interests, travelType, budget, description } = req.body;
     const newItinerary = new Itinerary({
       user: user._id,
-      destination,
+      destination: sanitizeText(destination),
       startDate,
       endDate,
-      interests: interests.split(',').map(i => i.trim()),
-      travelType,
-      budget,
-      description,
+      interests: sanitizeCsvToArray(interests),
+      travelType: sanitizeText(travelType),
+      budget: sanitizeText(budget),
+      description: sanitizeText(description),
     });
     await newItinerary.save();
     res.status(201).json({ message: "Itinerary saved!" });
@@ -439,20 +530,50 @@ app.get("/api/user/:id", async (req, res) => {
   }
 });
 
-app.patch("/api/user/:id", async (req, res) => {
+app.patch("/api/user/:id", authenticateToken, async (req, res) => {
   try {
-    const { profilePhoto, ...rest } = req.body;
+    if (!isSelfRequest(req, req.params.id)) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
 
     const profile = await Profile.findOne({ userId: req.params.id });
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
 
-    // Update other profile fields
-    Object.assign(profile, rest);
+    const { profilePhoto } = req.body;
 
-    // 🔥 Explicitly update profilePhoto if it's present
-    if (profilePhoto && profile.photos.includes(profilePhoto)) {
+    if (req.body.firstName !== undefined) profile.firstName = sanitizeText(req.body.firstName);
+    if (req.body.gender !== undefined) profile.gender = sanitizeText(req.body.gender);
+    if (req.body.travelType !== undefined) profile.travelType = sanitizeText(req.body.travelType);
+    if (req.body.interestedIn !== undefined) profile.interestedIn = sanitizeText(req.body.interestedIn);
+    if (req.body.bio !== undefined) profile.bio = sanitizeText(req.body.bio);
+    if (req.body.location !== undefined) profile.location = sanitizeText(req.body.location);
+    if (req.body.dob !== undefined) profile.dob = sanitizeText(req.body.dob);
+    if (req.body.showGender !== undefined) profile.showGender = Boolean(req.body.showGender);
+
+    if (req.body.interests !== undefined) {
+      profile.interests = sanitizeCsvToArray(req.body.interests);
+    }
+    if (req.body.socialLinks && typeof req.body.socialLinks === "object") {
+      profile.socialLinks = {
+        instagram: normalizeExternalUrl(req.body.socialLinks.instagram || ""),
+        linkedin: normalizeExternalUrl(req.body.socialLinks.linkedin || ""),
+      };
+    }
+
+    const safeProfilePhoto = sanitizeFilename(profilePhoto);
+    if (safeProfilePhoto && profile.photos.includes(safeProfilePhoto)) {
+      profile.profilePhoto = safeProfilePhoto;
+    } else if (profilePhoto) {
+      return res.status(400).json({ message: "Invalid profile photo selection" });
+    }
+
+    if (req.body.photos && Array.isArray(req.body.photos)) {
+      return res.status(400).json({ message: "Photos can only be changed through upload endpoints" });
+    }
+
+    if (req.body.profilePhoto === "") {
       profile.profilePhoto = profilePhoto;
     }
 
@@ -487,7 +608,8 @@ app.post("/api/review/:userId", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const { rating, comment } = req.body;
+    const { rating } = req.body;
+    const comment = sanitizeText(req.body?.comment);
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({ message: "Rating must be between 1 and 5" });
     }
@@ -674,14 +796,19 @@ app.get('/api/my-matches', authenticateToken, async (req, res) => {
 });
 /* ----------------  GET conversation history  ---------------- */
 app.get("/api/messages", authenticateToken, async (req, res) => {
-  const { user1, user2 } = req.query;
-  if (!user1 || !user2) return res.status(400).json({ message: "Missing params" });
+  const me = req.user.email;
+  const user2 = sanitizeText(req.query.user2);
+  if (!user2) return res.status(400).json({ message: "Missing user2" });
+  if (user2 === me) return res.status(400).json({ message: "Cannot query conversation with self" });
 
   try {
+    const matched = await areUsersMatched(me, user2);
+    if (!matched) return res.status(403).json({ message: "Only matched users can view chats" });
+
     const msgs = await Message.find({
       $or: [
-        { sender: user1, receiver: user2 },
-        { sender: user2, receiver: user1 }
+        { sender: me, receiver: user2 },
+        { sender: user2, receiver: me }
       ]
     }).sort({ createdAt: 1 });     // chronological
     res.json(msgs);
@@ -693,19 +820,21 @@ app.get("/api/messages", authenticateToken, async (req, res) => {
 
 /* ----------------  POST new message (REST)  ---------------- */
 app.post("/api/messages/send", authenticateToken, async (req, res) => {
-  const { receiver, content } = req.body;
+  const receiver = sanitizeText(req.body?.receiver);
+  const content = sanitizeText(req.body?.content);
   const sender = req.user.email;
   if (!receiver || !content) return res.status(400).json({ message: "receiver & content required" });
   if (sender === receiver) return res.status(400).json({ message: "Cannot message yourself" });
 
   /* confirm they are matched */
   const me = await User.findOne({ email: sender });
-  if (!me.matches.includes(receiver))
+  if (!me || !Array.isArray(me.matches) || !me.matches.includes(receiver)) {
     return res.status(403).json({ message: "Only matched users can chat" });
+  }
 
   try {
-    const m = await Message.create({ sender, receiver, content, createdAt: new Date() });
-    io.emit("newMessage", m);              // push via socket, too
+    const m = await Message.create({ sender, receiver, content });
+    io.to(userRoom(sender)).to(userRoom(receiver)).emit("newMessage", m);
     res.status(201).json(m);
   } catch (e) {
     console.error("Send msg error:", e);
@@ -760,7 +889,8 @@ app.patch("/api/review/:id", authenticateToken, async (req, res) => {
     if (!review.reviewer.equals(reviewer._id)) {
       return res.status(403).json({ message: "Unauthorized" });
     }
-    const { rating, comment } = req.body;
+    const { rating } = req.body;
+    const comment = req.body?.comment !== undefined ? sanitizeText(req.body.comment) : undefined;
     review.rating = rating ?? review.rating;
     review.comment = comment ?? review.comment;
     await review.save();
@@ -832,30 +962,38 @@ app.post("/api/upload-photo", authenticateToken, upload.single("photo"), async (
 
 // PATCH /api/user/:id/set-profile-photo
 app.patch("/api/user/:id/set-profile-photo", authenticateToken, async (req, res) => {
-  const userId = req.params.id;
-  const { filename } = req.body;
+  try {
+    const userId = req.params.id;
+    const filename = sanitizeFilename(req.body?.filename);
 
-  // 🔐 Secure: Match ID from token with ID in URL
-  if (req.user.userId !== userId) {
-    return res.status(403).json({ message: "Unauthorized" });
+    if (!isSelfRequest(req, userId)) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const profile = await Profile.findOne({ userId: new mongoose.Types.ObjectId(userId) });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+    if (!filename || !profile.photos.includes(filename)) {
+      return res.status(400).json({ message: "Photo not in user's gallery" });
+    }
+
+    profile.profilePhoto = filename;
+    await profile.save();
+
+    res.json({ message: "✅ Profile photo updated", profilePhoto: filename });
+  } catch (err) {
+    console.error("Set profile photo error:", err);
+    res.status(500).json({ message: "Server error" });
   }
-  const profile = await Profile.findOne({ userId: new mongoose.Types.ObjectId(userId) });
-  if (!profile) return res.status(404).json({ message: "Profile not found" });
-
-  if (!profile.photos.includes(filename)) {
-    return res.status(400).json({ message: "Photo not in user's gallery" });
-  }
-
-  profile.profilePhoto = filename;
-  await profile.save();
-
-  res.json({ message: "✅ Profile photo updated", profilePhoto: filename });
 });
 
 app.post("/api/user/:id/upload-photo", authenticateToken, upload.single("photo"), async (req, res) => {
   try {
     const userId = req.params.id;
-    const profile = await Profile.findOne({ userId });
+    if (!isSelfRequest(req, userId)) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const profile = await Profile.findOne({ userId: new mongoose.Types.ObjectId(userId) });
 
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
@@ -872,18 +1010,27 @@ app.post("/api/user/:id/upload-photo", authenticateToken, upload.single("photo")
 });
 
 app.delete("/api/photo/:filename", authenticateToken, async (req, res) => {
-  const profile = await Profile.findOne({ email: req.user.email });
+  try {
+    const profile = await Profile.findOne({ email: req.user.email });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
 
-  const filename = req.params.filename;
-  const filePath = path.join(__dirname, "uploads", filename);
+    const filename = sanitizeFilename(req.params.filename);
+    if (!filename || !profile.photos.includes(filename)) {
+      return res.status(400).json({ message: "Invalid photo" });
+    }
 
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  profile.photos = profile.photos.filter(p => p !== filename);
+    const filePath = path.join(uploadsDir, filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    profile.photos = profile.photos.filter((p) => p !== filename);
 
-  if (profile.profilePhoto === filename) profile.profilePhoto = "";
+    if (profile.profilePhoto === filename) profile.profilePhoto = "";
 
-  await profile.save();
-  res.json({ message: "Photo deleted" });
+    await profile.save();
+    res.json({ message: "Photo deleted" });
+  } catch (err) {
+    console.error("Delete photo error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 // ✏️ PATCH - Edit Profile
@@ -908,15 +1055,13 @@ app.patch("/api/profile/edit", authenticateToken, async (req, res) => {
     if (dob_day && dob_month && dob_year) {
       profile.dob = `${dob_year.padStart(4, '0')}-${dob_month.padStart(2, '0')}-${dob_day.padStart(2, '0')}`;
     }
-    if (firstName) profile.firstName = firstName;
-    if (gender) profile.gender = gender;
+    if (firstName) profile.firstName = sanitizeText(firstName);
+    if (gender) profile.gender = sanitizeText(gender);
     if (typeof showGender !== "undefined") profile.showGender = showGender === "true" || showGender === true;
-    if (interestedIn) profile.interestedIn = interestedIn;
-    if (travelType) profile.travelType = travelType;
+    if (interestedIn) profile.interestedIn = sanitizeText(interestedIn);
+    if (travelType) profile.travelType = sanitizeText(travelType);
     if (interests) {
-      profile.interests = Array.isArray(interests)
-        ? interests
-        : interests.split(",").map((i) => i.trim());
+      profile.interests = sanitizeCsvToArray(interests);
     }
     await profile.save();
     res.json({ message: "Profile updated", profile });
@@ -954,17 +1099,20 @@ app.delete("/api/profile/delete", authenticateToken, async (req, res) => {
 app.patch("/api/user/:id/delete-photo", authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
-    const { filename } = req.body;
+    const filename = sanitizeFilename(req.body?.filename);
 
     // ✅ Security Check: Ensure the token user matches the profile being edited
-    if (req.user.userId !== userId) {
+    if (!isSelfRequest(req, userId)) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    const profile = await Profile.findOne({ userId });
+    const profile = await Profile.findOne({ userId: new mongoose.Types.ObjectId(userId) });
     if (!profile) return res.status(404).json({ message: "Profile not found" });
+    if (!filename || !profile.photos.includes(filename)) {
+      return res.status(400).json({ message: "Invalid photo" });
+    }
 
-    const filePath = path.join(__dirname, "uploads", filename);
+    const filePath = path.join(uploadsDir, filename);
 
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
@@ -986,6 +1134,10 @@ app.delete("/api/itinerary/:id", authenticateToken, async (req, res) => {
     const itinerary = await Itinerary.findById(id);
 
     if (!itinerary) return res.status(404).json({ message: "Not found" });
+    const profile = await Profile.findOne({ email: req.user.email });
+    if (!profile || String(itinerary.user) !== String(profile._id)) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
 
     await itinerary.deleteOne();
     res.json({ message: "Deleted successfully" });
@@ -994,6 +1146,9 @@ app.delete("/api/itinerary/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// SPA fallback for frontend routes (excluding API/static/auth paths)
+app.get(/^\/(?!api\/|auth\/|uploads\/|static\/).*/, serveFrontendEntry);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found: " + req.method + " " + req.url });
@@ -1010,15 +1165,42 @@ const io = new Server(server, {
   }
 });
 
+io.use((socket, next) => {
+  const token = socket.handshake?.auth?.token;
+  if (!token) return next(new Error("Unauthorized"));
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    socket.userEmail = payload.email;
+    socket.userId = payload.userId;
+    return next();
+  } catch {
+    return next(new Error("Unauthorized"));
+  }
+});
+
 // ✅ Socket.IO logic
 io.on("connection", (socket) => {
-  console.log("🔌 Socket connected:", socket.id);
+  if (!socket.userEmail) {
+    socket.disconnect(true);
+    return;
+  }
 
-  socket.on("sendMessage", async (msg) => {
+  socket.join(userRoom(socket.userEmail));
+  console.log("🔌 Socket connected:", socket.id, socket.userEmail);
+
+  socket.on("sendMessage", async (msg = {}) => {
     try {
-      const newMsg = new Message(msg);
-      await newMsg.save();
-      io.emit("newMessage", newMsg); // broadcast to all
+      const receiver = sanitizeText(msg.receiver);
+      const content = sanitizeText(msg.content);
+      const sender = socket.userEmail;
+      if (!receiver || !content || sender === receiver) return;
+
+      const matched = await areUsersMatched(sender, receiver);
+      if (!matched) return;
+
+      const newMsg = await Message.create({ sender, receiver, content });
+      io.to(userRoom(sender)).to(userRoom(receiver)).emit("newMessage", newMsg);
     } catch (err) {
       console.error("❌ Socket message save error:", err);
     }

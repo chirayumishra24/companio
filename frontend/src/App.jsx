@@ -1,12 +1,27 @@
-import { Routes, Route, Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import Hero from './pages/Hero'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Matches from './pages/Matches'
 import ProfileSetup from './pages/ProfileSetup'
 import Messages from './pages/Messages'
+import SetPassword from './pages/SetPassword'
+import { setToken } from './lib/config'
 
 function App() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const token = params.get('token')
+    if (token) {
+      setToken(token)
+      navigate(location.pathname, { replace: true })
+    }
+  }, [location.pathname, location.search, navigate])
+
   return (
     <div className="min-h-screen">
       <nav className="border-b-4 border-black bg-brutal-yellow p-4 flex justify-between items-center backdrop-blur-sm z-50 sticky top-0">
@@ -25,6 +40,7 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/matches" element={<Matches />} />
           <Route path="/profile-setup" element={<ProfileSetup />} />
+          <Route path="/set-password" element={<SetPassword />} />
           <Route path="/messages/:matchId?" element={<Messages />} />
         </Routes>
       </main>

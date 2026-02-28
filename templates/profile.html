@@ -108,14 +108,39 @@
   </div>
 
 <script>
-const token = localStorage.getItem("token");
-const payload = token ? JSON.parse(atob(token.split(".")[1])) : null;
+const token = sessionStorage.getItem("token");
+let payload = null;
+try {
+  payload = token ? JSON.parse(atob(token.split(".")[1])) : null;
+} catch (err) {
+  payload = null;
+}
 const profileId = payload?.userId;
 console.log("User ID is:", profileId);
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeExternalUrl(value) {
+  if (!value) return "#";
+  try {
+    const u = new URL(value, window.location.origin);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+  } catch (err) {
+    return "#";
+  }
+  return "#";
+}
+
 if (!profileId) {
   alert("Session expired or invalid. Please login again.");
-  window.location.href = "./login.html";
+  window.location.href = "/login";
 }
 
 function getAge(dobString) {
@@ -129,7 +154,7 @@ function formatDate(dateStr) {
 }
 
 function logout() {
-  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
   window.location.href = "/";
 }
 
@@ -158,12 +183,12 @@ async function loadProfile() {
       const linkedin = document.getElementById("linkedinLink");
 
       if (profile.socialLinks.instagram) {
-        insta.href = profile.socialLinks.instagram;
+        insta.href = safeExternalUrl(profile.socialLinks.instagram);
         insta.innerText = "@" + profile.socialLinks.instagram.split("/").pop();
       }
 
       if (profile.socialLinks.linkedin) {
-        linkedin.href = profile.socialLinks.linkedin;
+        linkedin.href = safeExternalUrl(profile.socialLinks.linkedin);
         linkedin.innerText = "/in/" + profile.socialLinks.linkedin.split("/").pop();
       }
     }
@@ -184,12 +209,13 @@ async function loadProfile() {
     itineraries.forEach(item => {
       const card = document.createElement("div");
       card.className = "p-4 border rounded-lg bg-gray-100 relative";
+      const safeId = escapeHtml(item._id);
       card.innerHTML = `
-        <h4 class="text-lg font-semibold text-teal-700">${item.destination}</h4>
+        <h4 class="text-lg font-semibold text-teal-700">${escapeHtml(item.destination)}</h4>
         <p class="text-sm text-gray-700">From: ${formatDate(item.startDate)} → To: ${formatDate(item.endDate)}</p>
-        <p class="text-sm mt-1 text-gray-700">${item.description}</p>
-        <p class="text-xs text-gray-600 mt-1">Interests: ${item.interests.join(", ")}</p>
-        <button class="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded" onclick="deleteItinerary('${item._id}')">Delete</button>
+        <p class="text-sm mt-1 text-gray-700">${escapeHtml(item.description)}</p>
+        <p class="text-xs text-gray-600 mt-1">Interests: ${escapeHtml(item.interests.join(", "))}</p>
+        <button class="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded" onclick="deleteItinerary('${safeId}')">Delete</button>
       `;
       itineraryList.appendChild(card);
     });
@@ -202,10 +228,10 @@ async function loadProfile() {
       div.className = "bg-gray-700 p-4 rounded-lg border border-gray-600";
       div.innerHTML = `
         <div class="flex justify-between mb-2">
-          <span class="font-semibold">${r.reviewerName}</span>
-          <span class="text-yellow-500">⭐ ${r.rating}/5</span>
+          <span class="font-semibold">${escapeHtml(r.reviewerName)}</span>
+          <span class="text-yellow-500">⭐ ${escapeHtml(r.rating)}/5</span>
         </div>
-        <p class="text-sm">${r.comment}</p>
+        <p class="text-sm">${escapeHtml(r.comment)}</p>
         <p class="text-xs text-gray-400 mt-1">${new Date(r.date).toLocaleDateString()}</p>
       `;
       reviewList.appendChild(div);
@@ -379,7 +405,7 @@ async function deleteProfile() {
     if (!res.ok) throw new Error("Failed to delete profile");
 
     alert("✅ Profile deleted!");
-    localStorage.removeItem("token"); // Clear auth token
+    sessionStorage.removeItem("token"); // Clear auth token
     window.location.href = "/"; // Redirect to index.html
   } catch (err) {
     alert("❌ " + err.message);

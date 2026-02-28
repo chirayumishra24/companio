@@ -56,6 +56,11 @@
       <div id="userItineraries" class="space-y-2"></div>
     </div>
 
+    <div>
+      <h2 class="text-xl font-semibold mb-1">Reviews</h2>
+      <div id="userReviews" class="space-y-2"></div>
+    </div>
+
     <!-- Add Review Form -->
 <div class="bg-white p-4 rounded shadow mt-6">
   <h2 class="text-xl font-semibold mb-2">Leave a Review</h2>
@@ -72,14 +77,14 @@
 
   <script>
     (() => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   if (!token) {
     alert("Please log in again.");
     location.href = "/login";
     return;
   }
 
-  const stored = JSON.parse(localStorage.getItem("selectedProfile") || "{}");
+  const stored = JSON.parse(sessionStorage.getItem("selectedProfile") || "{}");
   const userId = new URLSearchParams(location.search).get("userId") || stored.userId;
 
   if (!userId) {
@@ -98,6 +103,14 @@
     itins: document.getElementById("userItineraries"),
     reviews: document.getElementById("userReviews"),
   };
+
+  const escapeHtml = (value) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
   const chip = (t) => {
     const s = document.createElement("span");
@@ -118,7 +131,7 @@
 
       if (!profile) throw new Error("Profile data missing");
 
-      profilePhoto.src = profile.profilePhoto
+      els.photo.src = profile.profilePhoto
   ? `/uploads/${profile.profilePhoto}`
   : `/static/images/default-avatar.png`; // ✅ make sure this path exists
 
@@ -144,8 +157,8 @@
         const d = document.createElement("div");
         d.className = "bg-white p-3 rounded shadow";
         d.innerHTML = `
-          <h3 class="font-bold">${it.destination || "Trip"}</h3>
-          <p>${it.description || ""}</p>
+          <h3 class="font-bold">${escapeHtml(it.destination || "Trip")}</h3>
+          <p>${escapeHtml(it.description || "")}</p>
           <p class="text-sm text-gray-500">
             ${new Date(it.startDate).toLocaleDateString()} – 
             ${new Date(it.endDate).toLocaleDateString()}
@@ -172,10 +185,10 @@
       d.className = "bg-white p-3 rounded shadow";
       d.innerHTML = `
         <div class="flex justify-between">
-          <span class="font-semibold">${r.reviewerName}</span>
-          <span class="text-yellow-500">⭐ ${r.rating}</span>
+          <span class="font-semibold">${escapeHtml(r.reviewerName)}</span>
+          <span class="text-yellow-500">⭐ ${escapeHtml(r.rating)}</span>
         </div>
-        <p class="mt-1">${r.comment}</p>
+        <p class="mt-1">${escapeHtml(r.comment)}</p>
         <p class="text-sm text-gray-400">
           ${new Date(r.date).toLocaleDateString()}
         </p>`;

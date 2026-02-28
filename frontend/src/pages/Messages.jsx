@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getToken } from '../lib/config';
 
 export default function Messages() {
     const { matchId } = useParams();
@@ -11,7 +11,7 @@ export default function Messages() {
 
     // Basic mock fetch simulating conversations list
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return navigate('/login');
 
         // Currently we just show a static placeholder as true realtime needs Socket.io React Context integration

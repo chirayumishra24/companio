@@ -85,7 +85,7 @@
      *  – defensive‑checks res.ok before looping
      * ----------------------------------------------------------- */
     (() => {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       if (!token) { location.href = "/login"; return; }
     
       let meEmail      = null;   // my e‑mail
@@ -97,6 +97,14 @@
       const chatBox  = document.getElementById("chat-box");
       const typingEl = document.getElementById("typing-indicator");
       const inputEl  = document.getElementById("chat-input");
+
+      const escapeHtml = (value) =>
+        String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
     
       /* helpers */
       const bubble = (msg) => {
@@ -128,11 +136,13 @@
         arr.forEach(u => {
           const li = document.createElement("li");
           li.className = "cursor-pointer hover:bg-yellow-200 p-2 rounded-lg flex items-center gap-3";
+          const safeName = escapeHtml(u.name);
+          const safeDestination = escapeHtml(u.destination);
           li.innerHTML = `
             <img src="${u.image}" class="w-10 h-10 rounded-full"/>
             <div>
-              <p class="font-semibold text-teal-900">${u.name}</p>
-              <p class="text-xs text-teal-700">${u.destination}</p>
+              <p class="font-semibold text-teal-900">${safeName}</p>
+              <p class="text-xs text-teal-700">${safeDestination}</p>
             </div>`;
           li.onclick = () => openChat(u.email, u.name);   // 🟢 USE e‑mail
           listUl.appendChild(li);
@@ -145,13 +155,13 @@
         headerEl.textContent = `Chatting with ${name}`;
         chatBox.innerHTML    = "";
     
-        const res = await fetch(`/api/messages?user1=${encodeURIComponent(meEmail)}&user2=${encodeURIComponent(email)}`,
+        const res = await fetch(`/api/messages?user2=${encodeURIComponent(email)}`,
                      { headers:{Authorization:`Bearer ${token}`}});
     
         /* fallback if token expired */
         if (!res.ok) {
           alert("Session expired – please log in again.");
-          localStorage.removeItem("token");
+          sessionStorage.removeItem("token");
           return location.href = "/login";
         }
     
@@ -161,13 +171,17 @@
       }
     
       /* ───────── send via socket.io ───────── */
-      const socket = io();
+      const socket = io({ auth: { token } });
+      socket.on("connect_error", () => {
+        sessionStorage.removeItem("token");
+        location.href = "/login";
+      });
       document.getElementById("chat-form").onsubmit = e => {
         e.preventDefault();
         const txt = inputEl.value.trim();
         if (!txt || !partnerEmail) return;
     
-        const msg = { sender:meEmail, receiver:partnerEmail, content:txt };
+        const msg = { receiver: partnerEmail, content: txt };
         socket.emit("sendMessage", msg);
         inputEl.value = "";
       };

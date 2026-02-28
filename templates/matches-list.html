@@ -94,7 +94,7 @@
   <script>
   const container = document.getElementById("matchesContainer");
   const template = document.getElementById("matchCardTemplate");
-  let token = localStorage.getItem("token");
+  let token = sessionStorage.getItem("token");
 
   function renderStars(rating) {
     const fullStars = Math.floor(rating);
@@ -145,7 +145,7 @@
         });
 
         card.querySelector("[data-view]").addEventListener("click", () => {
-  localStorage.setItem("selectedProfile", JSON.stringify(match));
+  sessionStorage.setItem("selectedProfile", JSON.stringify(match));
   window.location.href = `/view-profile?userId=${match.userId}`;   // 👈
 });
 
@@ -154,7 +154,7 @@
     } catch (err) {
       console.error("❌ Error:", err.message);
       alert("Please login again");
-      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
       window.location.href = "/login";
     }
   }

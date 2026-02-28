@@ -151,11 +151,31 @@
 <script>
   let profileQueue = [];
   const cardsContainer = document.getElementById("card-stack");
-  let token = localStorage.getItem("token");
+  let token = sessionStorage.getItem("token");
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function safeExternalUrl(value) {
+    if (!value) return "#";
+    try {
+      const u = new URL(value, window.location.origin);
+      if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+    } catch (err) {
+      return "#";
+    }
+    return "#";
+  }
   
   function alertAndRedirect() {
     alert("Login expired. Please log in again.");
-    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
     window.location.href = "/login";
   }
   
@@ -169,11 +189,11 @@
     const params = new URLSearchParams(window.location.search);
     const t = params.get("token");
     if (t) {
-      localStorage.setItem("token", t);
+      sessionStorage.setItem("token", t);
       window.history.replaceState({}, "", "/matches");
     }
   
-    token = localStorage.getItem("token");
+    token = sessionStorage.getItem("token");
     if (!token) return alertAndRedirect();
   
     fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } })
@@ -220,21 +240,31 @@
     card.dataset.name = p.firstName || p.name || "Anon";
   
     const img = p.profilePhoto || "/static/images/default-avatar.png";
+    const firstName = escapeHtml(p.firstName || "Anon");
+    const bio = escapeHtml(p.bio || "—");
+    const interests = escapeHtml((p.interests || []).join(", ") || "—");
+    const travelType = escapeHtml(p.travelType || "—");
+    const location = escapeHtml(p.location || "—");
+    const instagram = escapeHtml(p.socialLinks?.instagram || "N/A");
+    const linkedin = escapeHtml(p.socialLinks?.linkedin || "N/A");
+    const instagramHref = safeExternalUrl(p.socialLinks?.instagram);
+    const linkedinHref = safeExternalUrl(p.socialLinks?.linkedin);
+    const age = p.dob ? calculateAge(p.dob) : "—";
 
   
     card.innerHTML = `
-      <img src="${img}" class="w-full h-48 object-cover rounded-lg shadow" alt="${p.firstName}'s photo"/>
+      <img src="${img}" class="w-full h-48 object-cover rounded-lg shadow" alt="${firstName}'s photo"/>
       <div class="mt-4">
-        <h2 class="text-xl font-semibold">${p.firstName || "Anon"}, ${p.dob ? calculateAge(p.dob) : "—"}</h2>
-        <p class="text-gray-600 text-sm mb-2"><strong>Bio:</strong> ${p.bio || "—"}</p>
-        <p class="text-gray-700 text-sm"><strong>Interests:</strong> ${(p.interests || []).join(", ") || "—"}</p>
-        <p class="text-gray-700 text-sm"><strong>Travel Type:</strong> ${p.travelType || "—"}</p>
-        <p class="text-gray-700 text-sm"><strong>Location:</strong> ${p.location || "—"}</p>
+        <h2 class="text-xl font-semibold">${firstName}, ${age}</h2>
+        <p class="text-gray-600 text-sm mb-2"><strong>Bio:</strong> ${bio}</p>
+        <p class="text-gray-700 text-sm"><strong>Interests:</strong> ${interests}</p>
+        <p class="text-gray-700 text-sm"><strong>Travel Type:</strong> ${travelType}</p>
+        <p class="text-gray-700 text-sm"><strong>Location:</strong> ${location}</p>
         <div class="text-sm mt-2">
-          <p><strong>Instagram:</strong> <a href="${p.socialLinks?.instagram || "#"}" target="_blank"
-               class="text-blue-500 underline">${p.socialLinks?.instagram || "N/A"}</a></p>
-          <p><strong>LinkedIn:</strong> <a href="${p.socialLinks?.linkedin || "#"}" target="_blank"
-               class="text-blue-500 underline">${p.socialLinks?.linkedin || "N/A"}</a></p>
+          <p><strong>Instagram:</strong> <a href="${instagramHref}" target="_blank" rel="noopener noreferrer"
+               class="text-blue-500 underline">${instagram}</a></p>
+          <p><strong>LinkedIn:</strong> <a href="${linkedinHref}" target="_blank" rel="noopener noreferrer"
+               class="text-blue-500 underline">${linkedin}</a></p>
         </div>
       </div>
     `;
@@ -324,13 +354,13 @@
       card.className = "bg-yellow-100 border border-yellow-300 p-4 rounded-xl text-teal-900 shadow";
   
       card.innerHTML = `
-        <p><strong>Traveller:</strong> ${profile.firstName || "Unknown"}</p>
-        <p><strong>Destination:</strong> ${it.destination || "Unknown"}</p>
+        <p><strong>Traveller:</strong> ${escapeHtml(profile.firstName || "Unknown")}</p>
+        <p><strong>Destination:</strong> ${escapeHtml(it.destination || "Unknown")}</p>
         <p><strong>From:</strong> ${it.startDate ? new Date(it.startDate).toLocaleDateString() : "—"}</p>
         <p><strong>To:</strong> ${it.endDate ? new Date(it.endDate).toLocaleDateString() : "—"}</p>
-        <p><strong>Budget:</strong> ${it.budget || "—"}</p>
-        <p><strong>Travel Type:</strong> ${it.travelType || "—"}</p>
-        <p><strong>Description:</strong> ${it.description || "—"}</p>`;
+        <p><strong>Budget:</strong> ${escapeHtml(it.budget || "—")}</p>
+        <p><strong>Travel Type:</strong> ${escapeHtml(it.travelType || "—")}</p>
+        <p><strong>Description:</strong> ${escapeHtml(it.description || "—")}</p>`;
       grid.appendChild(card);
     }
   

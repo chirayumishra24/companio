@@ -5,31 +5,40 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import User from './models/User.js';
-// assuming 'User' is already registered
+export const isGoogleOAuthConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+);
 
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "/auth/google/callback"
-},
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    let user = await User.findOne({ email: profile.emails[0].value });
+if (isGoogleOAuthConfigured) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "/auth/google/callback"
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value?.toLowerCase()?.trim();
+      if (!email) return done(new Error("Google profile email missing"), null);
 
-    if (!user) {
-      user = new User({
-        email: profile.emails[0].value,
-        name: profile.displayName,
-        passwordHash: "GOOGLE_AUTH" // optional placeholder
-      });
-      await user.save();
+      let user = await User.findOne({ email });
+
+      if (!user) {
+        user = new User({
+          email,
+          // Keep password unset for OAuth-only accounts.
+          passwordHash: ""
+        });
+        await user.save();
+      }
+
+      done(null, user);
+    } catch (err) {
+      done(err, null);
     }
-
-    done(null, user);
-  } catch (err) {
-    done(err, null);
-  }
-}));
+  }));
+} else {
+  console.warn("⚠️ Google OAuth not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing).");
+}
 
 passport.serializeUser((user, done) => {
   done(null, user.id);

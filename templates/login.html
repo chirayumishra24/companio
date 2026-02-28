@@ -68,7 +68,7 @@
 
     async function redirectAfterLogin(token) {
       try {
-        localStorage.setItem('token', token);
+        sessionStorage.setItem('token', token);
 
         // Check if profile exists
         const res = await fetch('/api/profile', {
@@ -107,25 +107,9 @@
 
             if (res.ok) {
   const { token, profileSetupComplete } = result;
-  localStorage.setItem("token", token);
+  sessionStorage.setItem("token", token);
   window.location.href = profileSetupComplete ? "/matches" : "/profile-setup";
 
-            } else if (
-              result.message &&
-              result.message.includes("doesn't have a password")
-            ) {
-              const tokenRes = await fetch('/auth/get-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: data.email })
-              });
-
-              const tokenData = await tokenRes.json();
-              if (tokenRes.ok) {
-                window.location.href = `/set-password?token=${tokenData.token}`;
-              } else {
-                alert("Couldn't generate token for password setup.");
-              }
             } else {
               alert(result.message || "Login failed.");
             }
@@ -145,7 +129,7 @@
         redirectAfterLogin(googleToken);
       }
 
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       if (token) {
         try {
           const payload = JSON.parse(atob(token.split('.')[1]));
