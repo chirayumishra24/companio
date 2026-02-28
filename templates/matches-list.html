@@ -1,16 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <link rel="stylesheet" href="../static/css/styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Matches - Companio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image: url('/static/images/travel-bg.jpg');
+      background-size: cover;
+      background-position: center;
+    }
+    .glass {
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .match-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .match-card:hover {
+      transform: translateY(-5px) scale(1.01);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+    }
+    .fadeInUp {
+      animation: fadeInUp 0.6s ease-out;
+    }
+    @keyframes fadeInUp {
+      0% {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
 </head>
-<body class="p-4">
-  <h2 class="text-xl font-bold mb-4">Your Matches</h2>
-  <div id="matchesContainer" class="space-y-4"></div>
+<body class="min-h-screen relative text-gray-900 font-sans">
 
-  <script src="../static/js/match-list.js"></script>
+  <!-- Overlay -->
+  <div class="absolute inset-0 bg-black bg-opacity-60 z-0"></div>
+
+  <!-- Header -->
+  <header class="w-full px-6 py-4 bg-teal-500 shadow-md flex justify-between items-center sticky top-0 z-50 relative">
+    <div class="text-2xl font-bold text-white">Companio</div>
+    <nav class="space-x-6 hidden md:flex items-center">
+      <a href="/matches" class="hover:text-yellow-200 text-white font-semibold">Matches</a>
+      <a href="/messages" class="hover:text-yellow-200 text-white">Messages</a>
+      <a href="/profile" class="hover:text-yellow-200 text-white">Profile</a>
+      <button onclick="window.location.href='/itinerary-form'" class="bg-yellow-300 text-teal-800 px-4 py-1 rounded hover:bg-yellow-400 text-sm">Submit Itinerary</button>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="relative z-10 px-6 pt-16 pb-10">
+    <h2 class="text-3xl font-bold text-yellow-300 text-center mb-10 drop-shadow-lg">💑 Your Travel Matches</h2>
+
+    <div id="matchesContainer" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+      <!-- Cards will be injected here -->
+    </div>
+  </main>
+
+  <!-- Template -->
+  <template id="matchCardTemplate">
+    <div class="match-card rounded-xl overflow-hidden shadow-lg glass border border-teal-200 fadeInUp">
+      <img src=" " alt="User" class="w-full h-48 object-cover rounded-t-xl">
+      <div class="p-4 space-y-1">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold text-teal-800" data-name></h3>
+          <span class="text-sm bg-yellow-300 text-teal-800 px-2 py-0.5 rounded-full font-semibold" data-match></span>
+        </div>
+        <p class="text-sm text-gray-700 mb-1"><span data-destination></span> · <span data-dates></span></p>
+
+        <!-- Stars -->
+        <div class="flex items-center mb-2">
+          <div class="text-yellow-400 text-lg" data-stars></div>
+          <span class="ml-2 text-sm text-gray-800" data-rating></span>
+        </div>
+
+        <!-- Interests -->
+        <div class="flex flex-wrap gap-2 text-sm" data-interests></div>
+      </div>
+
+      <div class="px-4 pb-4 flex justify-between mt-2">
+        <button class="bg-yellow-400 hover:bg-yellow-500 text-teal-900 px-4 py-1 rounded-full text-sm font-semibold" data-chat>💬 Chat</button>
+        <button class="bg-pink-400 hover:bg-pink-500 text-white px-4 py-1 rounded-full text-sm font-semibold" data-view>🔍 View</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- Script -->
+  <script>
+  const container = document.getElementById("matchesContainer");
+  const template = document.getElementById("matchCardTemplate");
+  let token = localStorage.getItem("token");
+
+  function renderStars(rating) {
+    const fullStars = Math.floor(rating);
+    const half = rating - fullStars >= 0.5;
+    let stars = '⭐'.repeat(fullStars);
+    if (half) stars += '✰';
+    return stars;
+  }
+
+  function formatDateRange(start, end) {
+    const opts = { day: '2-digit', month: 'short' };
+    const s = new Date(start).toLocaleDateString('en-GB', opts);
+    const e = new Date(end).toLocaleDateString('en-GB', opts);
+    return `${s} – ${e}`;
+  }
+
+  async function fetchMatches() {
+    try {
+      const res = await fetch('/api/mutual-matches', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) throw new Error("Session expired");
+
+      const matches = await res.json();
+
+      matches.forEach(match => {
+        const card = template.content.cloneNode(true);
+        card.querySelector("img").src = match.image || "/static/images/default-avatar.png";
+        card.querySelector("[data-name]").textContent = match.name || "Unknown";
+        card.querySelector("[data-destination]").textContent = match.destination || "—";
+        card.querySelector("[data-dates]").textContent = formatDateRange(match.startDate, match.endDate);
+        card.querySelector("[data-stars]").innerHTML = renderStars(match.rating || 4);
+        card.querySelector("[data-rating]").textContent = `${match.rating || 4}/5`;
+        card.querySelector("[data-match]").textContent = `${match.matchPercent || 70}% Match`;
+
+        const interestsDiv = card.querySelector("[data-interests]");
+        (match.interests || []).forEach(interest => {
+          const chip = document.createElement("span");
+          chip.textContent = interest;
+          chip.className = "bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full";
+          interestsDiv.appendChild(chip);
+        });
+
+        // 🔄 Chat button
+        card.querySelector("[data-chat]").addEventListener("click", () => {
+          window.location.href = `/messages?with=${match._id}`;
+        });
+
+        card.querySelector("[data-view]").addEventListener("click", () => {
+  localStorage.setItem("selectedProfile", JSON.stringify(match));
+  window.location.href = `/view-profile?userId=${match.userId}`;   // 👈
+});
+
+        container.appendChild(card);
+      });
+    } catch (err) {
+      console.error("❌ Error:", err.message);
+      alert("Please login again");
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", fetchMatches);
+</script>
+
 </body>
-
 </html>

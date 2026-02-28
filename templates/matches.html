@@ -3,37 +3,364 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Companio – Find a Match</title>
-  <link rel="stylesheet" href="../css/styles.css" />
+  <title>Find a Travel Companion</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card-stack > div {
+      transition: transform 0.4s ease, opacity 0.3s ease;
+    }
+    @keyframes bounceIn {
+      0%   { transform: scale(0.7); opacity: 0; }
+      60%  { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+    .animate-bounceIn { animation: bounceIn 0.5s ease-out; }
+  </style>
 </head>
-<body class="bg-gray-100 p-4">
-  <!-- Toolbar -->
-  <div class="flex justify-between items-center mb-4">
-    <a href="./index.html" class="text-blue-600 underline">← Back to Home</a>
-    <select id="destinationFilter" class="border px-2 py-1 rounded">
-      <option value="">All Destinations</option>
-      <option value="Goa">Goa</option>
-      <option value="Ladakh">Ladakh</option>
-      <option value="Manali">Manali</option>
-    </select>
-  </div>
+<body class="bg-yellow-50 text-gray-900 font-sans">
 
-  <!-- Profile Card -->
-  <div id="profileCard" class="bg-white rounded-xl shadow-md p-4 transition-opacity duration-300">
-    <img id="profilePhoto" src="../static/images/dummy-user.png" alt="User Photo" class="rounded-full w-32 h-32 mx-auto">
-    <h2 id="profileName" class="text-xl text-center font-semibold mt-2"></h2>
-    <p id="profileInfo" class="text-center text-gray-600 mb-2"></p>
-    <p id="compatibilityScore" class="text-center text-blue-500 font-semibold mb-2"></p>
-    <p id="swipeCounter" class="text-center text-sm text-gray-400"></p>
+<!-- Navbar -->
+<header class="w-full px-6 py-4 bg-teal-500 shadow-md flex justify-between items-center sticky top-0 z-50">
+  <div class="text-2xl font-bold text-white">Companio</div>
+  <nav class="space-x-6 hidden md:flex items-center">
+    <a href="/matches-list" class="hover:text-yellow-100 text-yellow-200 font-semibold transition">Matches</a>
+    <a href="/messages"     class="hover:text-yellow-100 text-white transition">Messages</a>
+    <a href="/profile"      class="hover:text-yellow-100 text-white transition">Profile</a>
+    <button onclick="window.location.href='/itinerary-form'"
+            class="bg-yellow-300 text-teal-800 px-4 py-1 rounded hover:bg-yellow-400 text-sm">
+      Submit Itinerary
+    </button>
+  </nav>
+</header>
 
-    <div class="flex justify-center gap-6 mt-4">
-      <button id="dislikeBtn" class="bg-red-500 text-white px-4 py-2 rounded-full">❌</button>
-      <button id="likeBtn" class="bg-green-500 text-white px-4 py-2 rounded-full">✅</button>
+<!-- Main Content -->
+<main class="flex flex-col md:flex-row min-h-screen mt-0">
+
+  <!-- Sidebar -->
+  <aside class="hidden md:block w-full md:w-1/4 p-6 bg-teal-100 shadow-inner">
+    <div class="text-center">
+      <img src="/static/images/default-avatar.png"
+           class="w-24 h-24 mx-auto rounded-full border-2 border-yellow-300 shadow"
+           alt="Your photo"/>
+      <h2 class="text-xl font-semibold mt-3 text-teal-900">You</h2>
+    </div>
+
+    <div class="mt-6 space-y-3">
+      <button onclick="window.location.href='/matches-list'"
+              class="w-full bg-yellow-400 py-2 rounded-lg text-teal-900 hover:bg-yellow-500 font-semibold">
+        Matches
+      </button>
+      <button onclick="window.location.href='/messages'"
+              class="w-full bg-teal-300 py-2 rounded-lg text-teal-900 hover:bg-teal-400 font-semibold">
+        Messages
+      </button>
+      <button onclick="window.location.href='/itinerary-form'"
+              class="w-full bg-yellow-500 py-2 rounded-lg text-teal-900 hover:bg-yellow-600 font-semibold">
+        Submit Itinerary
+      </button>
+    </div>
+
+    <div class="bg-yellow-100 mt-6 p-4 rounded-xl text-sm text-teal-800 shadow">
+      <h3 class="font-bold text-teal-900 mb-2">Start Matching</h3>
+      <p>Post or like itineraries below to find companions.</p>
+    </div>
+  </aside>
+
+  <!-- Page Content -->
+  <section class="flex-1 p-6">
+    <h2 class="text-2xl font-bold text-teal-700 mb-4">🌍 Explore Travel Companions</h2>
+
+    <!-- Filters -->
+    <div class="relative mb-6">
+      <button onclick="toggleFilterDropdown()"
+              class="bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg text-white">
+        🔍 Filters
+      </button>
+
+      <div id="filterDropdown"
+           class="relative z-40 mt-2 w-full max-w-xl bg-white border border-teal-300 rounded-lg p-4 shadow-lg hidden">
+        <div class="grid sm:grid-cols-2 gap-4">
+          <input  id="filterDestination" type="text" placeholder="Destination"
+                  class="px-4 py-2 rounded-lg bg-yellow-50 text-gray-900 border border-teal-300"/>
+          <input  id="filterDates"       type="text" placeholder="Date Range"
+                  class="px-4 py-2 rounded-lg bg-yellow-50 text-gray-900 border border-teal-300"/>
+          <select id="filterBudget"
+                  class="px-4 py-2 rounded-lg bg-yellow-50 text-gray-900 border border-teal-300">
+            <option value="">Budget</option><option>Low</option><option>Mid</option><option>High</option>
+          </select>
+          <select id="filterTravelType"
+                  class="px-4 py-2 rounded-lg bg-yellow-50 text-gray-900 border border-teal-300">
+            <option value="">Travel Type</option><option>Solo</option><option>Couple</option>
+            <option>Group</option><option>Family</option>
+          </select>
+          <select id="filterGender"
+                  class="px-4 py-2 rounded-lg bg-yellow-50 text-gray-900 border border-teal-300">
+            <option value="">Traveling with</option><option>Men</option><option>Women</option><option>Everyone</option>
+          </select>
+        </div>
+        <button onclick="applyFilters()"
+                class="mt-4 w-full bg-yellow-400 hover:bg-yellow-500 text-teal-900 py-2 rounded-lg font-semibold">
+          Apply Filters
+        </button>
+      </div>
+    </div>
+
+    <!-- Swipe Cards -->
+    <div id="card-stack"
+         class="relative z-10 w-full max-w-sm h-[460px] overflow-y-scroll mx-auto mb-6 card-stack">
+    </div>
+
+    <!-- Swipe Buttons -->
+    <div class="flex justify-center gap-6 mb-12">
+      <button id="dislikeBtn"
+              class="text-2xl w-12 h-12 bg-red-400 text-white rounded-full shadow">✘</button>
+      <button id="likeBtn"
+              class="text-2xl w-12 h-12 bg-green-400 text-white rounded-full shadow">❤</button>
+    </div>
+  </section>
+</main>
+
+<!-- Match Popup -->
+<div id="matchPopup"
+     class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center hidden z-50">
+  <div class="bg-white text-gray-800 rounded-3xl p-6 shadow-2xl text-center animate-bounceIn">
+    <div class="text-5xl mb-3">💘</div>
+    <h2 class="text-3xl font-extrabold text-pink-500 mb-2">It's a Match!</h2>
+    <p class="text-gray-600 mb-4">You and <span id="matchName"></span> liked each other!</p>
+
+    <div class="flex justify-center gap-6 mb-4">
+      <img id="myUserImage"      src="/static/images/default-avatar.png"
+           class="w-20 h-20 rounded-full border-4 border-pink-300" />
+      <img id="matchedUserImage" src="/static/images/default-avatar.png"
+           class="w-20 h-20 rounded-full border-4 border-pink-300" />
+    </div>
+
+    <div class="flex justify-center gap-4">
+      <button onclick="startChat()"
+              class="bg-pink-400 hover:bg-pink-500 text-white px-6 py-2 rounded-full">
+        💬 Start Chat
+      </button>
+      <button onclick="closeMatchPopup()"
+              class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-6 py-2 rounded-full">
+        🔁 Keep Swiping
+      </button>
     </div>
   </div>
+</div>
 
-  <script src="../static/js/match.js"></script>
-  <div id="chat-box"></div>
-  <script src="../static/js/chat.js"></script>
+<script>
+  let profileQueue = [];
+  const cardsContainer = document.getElementById("card-stack");
+  let token = localStorage.getItem("token");
+  
+  function alertAndRedirect() {
+    alert("Login expired. Please log in again.");
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  }
+  
+  function calculateAge(d) {
+    const bd = new Date(d);
+    const diff = Date.now() - bd;
+    return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+  }
+  
+  document.addEventListener("DOMContentLoaded", () => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("token");
+    if (t) {
+      localStorage.setItem("token", t);
+      window.history.replaceState({}, "", "/matches");
+    }
+  
+    token = localStorage.getItem("token");
+    if (!token) return alertAndRedirect();
+  
+    fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        document.querySelector("aside img").src = data.profilePhoto || "/static/images/default-avatar.png";
+        document.querySelector("aside h2").textContent = data.firstName || "You";
+      })
+      .catch(err => console.error("Sidebar load error:", err));
+  
+    fetchMatches();
+  });
+  
+  function fetchMatches(filters = {}) {
+    const queryParams = new URLSearchParams(filters).toString();
+    fetch(`/api/matches?${queryParams}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(profiles => {
+        profileQueue = profiles.reverse();
+        renderNextCard();
+  
+        if (profileQueue.length) {
+          showItineraryFor(profileQueue.at(-1));
+        }
+      })
+      .catch(err => {
+        console.error("❌ Error fetching matches:", err);
+        alertAndRedirect();
+      });
+  }
+  
+  function renderNextCard() {
+    cardsContainer.innerHTML = "";
+    if (!profileQueue.length) return showNoProfilesMessage();
+  
+    const p = profileQueue.pop();
+    showItineraryFor(p); // ✅ Show itinerary for the current card
+  
+    const card = document.createElement("div");
+    card.className = "swipe-card absolute inset-0 bg-white text-gray-800 rounded-2xl shadow-xl p-4";
+    card.dataset.email = p.email || "";
+    card.dataset.name = p.firstName || p.name || "Anon";
+  
+    const img = p.profilePhoto || "/static/images/default-avatar.png";
+
+  
+    card.innerHTML = `
+      <img src="${img}" class="w-full h-48 object-cover rounded-lg shadow" alt="${p.firstName}'s photo"/>
+      <div class="mt-4">
+        <h2 class="text-xl font-semibold">${p.firstName || "Anon"}, ${p.dob ? calculateAge(p.dob) : "—"}</h2>
+        <p class="text-gray-600 text-sm mb-2"><strong>Bio:</strong> ${p.bio || "—"}</p>
+        <p class="text-gray-700 text-sm"><strong>Interests:</strong> ${(p.interests || []).join(", ") || "—"}</p>
+        <p class="text-gray-700 text-sm"><strong>Travel Type:</strong> ${p.travelType || "—"}</p>
+        <p class="text-gray-700 text-sm"><strong>Location:</strong> ${p.location || "—"}</p>
+        <div class="text-sm mt-2">
+          <p><strong>Instagram:</strong> <a href="${p.socialLinks?.instagram || "#"}" target="_blank"
+               class="text-blue-500 underline">${p.socialLinks?.instagram || "N/A"}</a></p>
+          <p><strong>LinkedIn:</strong> <a href="${p.socialLinks?.linkedin || "#"}" target="_blank"
+               class="text-blue-500 underline">${p.socialLinks?.linkedin || "N/A"}</a></p>
+        </div>
+      </div>
+    `;
+    cardsContainer.appendChild(card);
+  }
+  
+  function swipe(direction) {
+    const card = document.querySelector('.swipe-card:last-child');
+    if (!card) return;
+  
+    const email = card.dataset.email?.trim();
+    const name = card.dataset.name;
+  
+    if (!email) return;
+  
+    if (direction === 'right') {
+      sendLike(email, name);
+      card.style.transform = 'translateX(100vw) rotate(15deg)';
+    } else {
+      sendDislike(email);
+      card.style.transform = 'translateX(-100vw) rotate(-15deg)';
+    }
+  
+    card.style.opacity = '0.5';
+  
+    setTimeout(() => {
+      card.remove();
+      renderNextCard();
+      const next = profileQueue.at(-1);
+      if (next) showItineraryFor(next);
+    }, 300);
+  }
+  
+  async function sendLike(email, name) {
+    const res = await fetch("/api/like", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ targetEmail: email })
+    });
+    const r = await res.json();
+    if (r.match) {
+      const myImg = document.querySelector("aside img")?.src || "/static/images/default-avatar.png";
+      const matchedImg = r.matchedUser?.photos?.[0]
+        ? `/uploads/${r.matchedUser.photos[0]}`
+        : "/static/images/default-avatar.png";
+      showMatchPopup(r.matchedUser?.firstName || "Your Match", matchedImg, myImg);
+    }
+  }
+  
+  async function sendDislike(email) {
+    await fetch("/api/dislike", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ targetEmail: email })
+    });
+  }
+  
+  function showItineraryFor(profile) {
+    document.getElementById("itinerary-wrapper")?.remove();
+  
+    const wrap = document.createElement("div");
+    wrap.id = "itinerary-wrapper";
+    wrap.className = "mt-8";
+  
+    const h3 = document.createElement("h3");
+    h3.className = "text-xl font-bold mb-4 text-purple-800";
+    h3.textContent = "🗺️ Current Itinerary";
+    wrap.appendChild(h3);
+  
+    const grid = document.createElement("div");
+    grid.className = "grid md:grid-cols-1 gap-4";
+    wrap.appendChild(grid);
+  
+    const it = profile.itinerary;
+  
+    if (!it) {
+      grid.innerHTML = `<p class="text-sm text-gray-600 bg-yellow-100 border border-yellow-300 p-4 rounded-xl">
+                          🚫 No itineraries posted.</p>`;
+    } else {
+      const card = document.createElement("div");
+      card.className = "bg-yellow-100 border border-yellow-300 p-4 rounded-xl text-teal-900 shadow";
+  
+      card.innerHTML = `
+        <p><strong>Traveller:</strong> ${profile.firstName || "Unknown"}</p>
+        <p><strong>Destination:</strong> ${it.destination || "Unknown"}</p>
+        <p><strong>From:</strong> ${it.startDate ? new Date(it.startDate).toLocaleDateString() : "—"}</p>
+        <p><strong>To:</strong> ${it.endDate ? new Date(it.endDate).toLocaleDateString() : "—"}</p>
+        <p><strong>Budget:</strong> ${it.budget || "—"}</p>
+        <p><strong>Travel Type:</strong> ${it.travelType || "—"}</p>
+        <p><strong>Description:</strong> ${it.description || "—"}</p>`;
+      grid.appendChild(card);
+    }
+  
+    document.querySelector("section.flex-1").appendChild(wrap);
+  }
+  
+  function showNoProfilesMessage() {
+    cardsContainer.innerHTML = `
+      <div class="text-center text-gray-500 mt-10">
+        <p class="text-lg">🚫 No more profiles to show.</p>
+      </div>
+    `;
+  }
+  
+  function showMatchPopup(name, matchedPhoto, myPhoto) {
+    document.getElementById("matchName").textContent = name;
+    document.getElementById("matchedUserImage").src = matchedPhoto;
+    document.getElementById("myUserImage").src = myPhoto;
+    document.getElementById("matchPopup").classList.remove("hidden");
+  }
+  function closeMatchPopup() {
+    document.getElementById("matchPopup").classList.add("hidden");
+  }
+  function startChat() {
+    window.location.href = "/messages";
+  }
+  
+  document.getElementById("likeBtn").addEventListener("click", () => swipe("right"));
+  document.getElementById("dislikeBtn").addEventListener("click", () => swipe("left"));
+  </script>
+  
 </body>
 </html>

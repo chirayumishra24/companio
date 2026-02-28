@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Companion Finder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+
+<body class="h-screen relative bg-cover bg-center bg-no-repeat" style="background-image: url('/static/images/travel-bg.jpg');">
+
+  <!-- Background overlay -->
+  <div class="absolute inset-0 bg-black bg-opacity-60 z-0"></div>
+
+  <!-- Navbar -->
+<header class="absolute top-0 left-0 w-full px-8 py-4 flex justify-between items-center z-50">
+  <div class="text-white font-bold text-xl">Companio</div>
+  <nav class="hidden md:flex space-x-6">
+    <a href="#" class="text-white hover:underline">Products</a>
+    <a href="#" class="text-white hover:underline">Learn</a>
+    <a href="#" class="text-white hover:underline">Support</a>
+    <a href="#" class="text-white hover:underline">Download</a>
+  </nav>
+  <a href="/login" class="bg-white text-black px-4 py-2 rounded-full hover:bg-gray-200 transition z-50">
+    Log in
+  </a>
+</header>
+
+
+  <!-- Hero Section -->
+  <section class="relative z-10 flex items-center justify-center h-full text-center px-4">
+    <div class="text-white">
+      <h1 class="text-5xl md:text-6xl font-extrabold mb-6">Start something epic.</h1>
+      <a href="/signup" class="bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg transition">
+        Create account
+      </a>
+    </div>
+  </section>
+
+  <!-- Testimonials Section -->
+  <section class="bg-gray-900 text-white py-12">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-3xl font-bold text-center mb-10">What Our Travelers Say</h2>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-md">
+          <h3 class="text-xl font-semibold mb-2">Aditi & Rohan</h3>
+          <hr class="border-gray-600 mb-4">
+          <p class="mb-4">Thanks to Companio, I found a like-minded solo traveler heading to Spiti Valley. It turned into a journey of a lifetime.</p>
+          <p class="text-sm text-gray-400">We met through the platform, chatted a few days, and realized we had the same vibe. Now, we’re planning our second trip together!</p>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-lg shadow-md">
+          <h3 class="text-xl font-semibold mb-2">Meera & Tanvi</h3>
+          <hr class="border-gray-600 mb-4">
+          <p class="text-sm text-gray-400">I was nervous about going solo to the Northeast. Companio matched me with another girl traveling to Meghalaya—now we’re best friends and adventure buddies!</p>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-lg shadow-md">
+          <h3 class="text-xl font-semibold mb-2">Jay & Nikhil</h3>
+          <hr class="border-gray-600 mb-4">
+          <p class="text-sm text-gray-400">From being strangers to sharing campsites in Ladakh—Companio made it easy to connect with safe, genuine travelers. Can’t wait for our next trek together!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-300 py-10 border-t border-gray-700">
+    <div class="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+      <div>
+        <h4 class="text-white font-bold mb-2">Legal</h4>
+        <ul class="space-y-1">
+          <li><a href="#" class="hover:underline">Privacy Policy</a></li>
+          <li><a href="#" class="hover:underline">Community Guidelines</a></li>
+          <li><a href="#" class="hover:underline">Terms of Service</a></li>
+          <li><a href="#" class="hover:underline">Cookie Policy</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-white font-bold mb-2">Company</h4>
+        <ul class="space-y-1">
+          <li><a href="#" class="hover:underline">About Us</a></li>
+          <li><a href="#" class="hover:underline">Blog</a></li>
+          <li><a href="#" class="hover:underline">Careers</a></li>
+          <li><a href="#" class="hover:underline">Press</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-white font-bold mb-2">Connect</h4>
+        <div class="flex gap-4 text-xl">
+          <a href="#"><i class="fab fa-instagram"></i></a>
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-facebook-f"></i></a>
+          <a href="#"><i class="fab fa-linkedin-in"></i></a>
+        </div>
+      </div>
+      <div>
+        <h4 class="text-white font-bold mb-2">Explore</h4>
+        <ul class="space-y-1">
+          <li><a href="#" class="hover:underline">Find Companions</a></li>
+          <li><a href="#" class="hover:underline">Safety Tips</a></li>
+          <li><a href="#" class="hover:underline">Help Center</a></li>
+          <li><a href="#" class="hover:underline">Contact Us</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-8 px-4 max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-gray-400 border-t border-gray-700 pt-4">
+      <div class="space-x-2 mb-2 md:mb-0">
+        <a href="#" class="hover:underline">FAQ</a> /
+        <a href="#" class="hover:underline">Safety Tips</a> /
+        <a href="#" class="hover:underline">Terms</a> /
+        <a href="#" class="hover:underline">Privacy</a>
+      </div>
+      <p>© 2025 Companio. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

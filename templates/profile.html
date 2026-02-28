@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Profile - Companio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-yellow-50 text-gray-900">
+  <div class="max-w-5xl mx-auto py-10 px-4">
+    <!-- Navigation -->
+    <nav class="bg-teal-500 p-4 flex justify-between items-center shadow-md rounded-xl">
+      <div class="text-xl font-bold text-white">Companio</div>
+      <div class="space-x-4">
+        <a href="/matches" class="text-yellow-100 hover:text-white">Dashboard</a>
+        <a href="/messages" class="text-yellow-100 hover:text-white">Messages</a>
+        <a href="/matches-list" class="text-yellow-100 hover:text-white">Matches</a>
+        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-white text-sm">Logout</button>
+      </div>
+    </nav>
+
+    <!-- Profile Header -->
+    <div class="bg-white rounded-xl shadow p-6 mb-8 mt-6">
+      <div class="flex flex-col md:flex-row items-center md:items-start">
+        <div class="w-32 h-32 rounded-full bg-gray-200 overflow-hidden">
+          <img id="main-photo" src="" alt="Profile Photo" class="rounded-full w-32 h-32 object-cover">
+        </div>
+        <div class="md:ml-6 mt-4 md:mt-0 text-center md:text-left">
+          <h2 id="name" class="text-2xl font-bold text-teal-700">John Doe</h2>
+          <p id="age-gender" class="text-sm text-gray-700">Age: 23 • Male</p>
+          <p id="travel-type" class="text-sm text-gray-700 mt-1">Travel Type: Solo</p>
+          <p id="interests" class="text-sm text-gray-700 mt-1">Interests: Trekking, Beaches</p>
+          <p id="bio" class="text-sm text-gray-700 mt-1">Bio: Adventurer at heart 🌍</p>
+          <p id="location" class="text-sm text-gray-700 mt-1">Location: Udaipur</p>
+          <p id="social-links" class="text-sm text-gray-700 mt-1">
+            Instagram: <a href="#" id="instagramLink" class="text-blue-500 underline">@yourhandle</a><br>
+            LinkedIn: <a href="#" id="linkedinLink" class="text-blue-500 underline">/in/yourname</a>
+          </p>
+        </div>
+        <div class="mt-4 flex gap-3 justify-center md:justify-start">
+          <button onclick="openEditForm()" class="bg-yellow-400 hover:bg-yellow-500 text-teal-900 px-4 py-1 rounded">Edit Profile</button>
+          <button onclick="deleteProfile()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-1 rounded">Delete Profile</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Profile Form -->
+    <div id="edit-profile" class="bg-white rounded-xl shadow p-6 mb-8 mt-6 hidden">
+      <h3 class="text-xl font-bold text-teal-700 mb-4">Edit Your Profile</h3>
+      <form id="editProfileForm" class="space-y-4">
+        <input type="text" name="firstName" placeholder="First Name" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <input type="date" name="dob" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <input type="text" name="gender" placeholder="Gender" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <input type="text" name="travelType" placeholder="Travel Type" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <input type="text" name="interests" placeholder="Interests (comma separated)" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <textarea name="bio" placeholder="Bio" rows="3" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300"></textarea>
+        <input type="text" name="location" placeholder="Location" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <input type="text" name="instagram" placeholder="Instagram URL" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <input type="text" name="linkedin" placeholder="LinkedIn URL" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+        <label for="profilePhotoSelect" class="block font-medium text-gray-700">Choose Profile Picture</label>
+<select id="profilePhotoSelect" class="w-full px-4 py-2 bg-yellow-100 rounded border border-teal-300">
+  <option value="">-- Select from uploaded photos --</option>
+</select>
+
+        <button type="submit" class="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded">Save Changes</button>
+      </form>
+    </div>
+
+    <!-- Photo Gallery -->
+    <div class="bg-white rounded-xl shadow p-6 mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-teal-700">Photo Gallery</h3>
+        <input type="file" id="photoInput" accept="image/*" class="hidden">
+        <button onclick="document.getElementById('photoInput').click()" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-1 rounded">Add Photo</button>
+      </div>
+      <div id="photo-gallery" class="flex gap-2 p-4 overflow-x-auto">
+        <!-- Photos will be inserted dynamically -->
+      </div>
+    </div>
+    
+    <!-- Itineraries -->
+<div class="bg-white rounded-xl shadow p-6 mb-8">
+  <div class="flex justify-between items-center mb-4">
+    <h3 class="text-xl font-semibold text-teal-700">Itineraries</h3>
+    <button onclick="window.location.href='/itinerary-form'" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-1 rounded">+ Add Itinerary</button>
+  </div>
+  <div id="itinerary-list" class="space-y-2 mt-4">
+    <!-- Itinerary cards go here -->
+  </div>
+</div>
+
+    <!-- Reviews -->
+    <div class="bg-white rounded-xl shadow p-6 mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold text-teal-700">Reviews</h3>
+        <span id="average-rating" class="text-yellow-600 font-bold text-lg">⭐ 4.5/5</span>
+      </div>
+      <div id="review-list" class="space-y-3 mt-4">
+        <!-- Reviews will be inserted dynamically -->
+      <form id="reviewForm" class="mt-4">
+  <h3 class="text-lg font-semibold">Write a Review</h3>
+  <input type="text" id="reviewerName" placeholder="Your Name" class="input" required>
+  <input type="number" id="rating" placeholder="Rating (1-5)" min="1" max="5" class="input" required>
+  <textarea id="comment" placeholder="Comment" class="input" required></textarea>
+  <button type="submit" class="bg-teal-600 text-white px-4 py-2 rounded mt-2">Submit Review</button>
+</form>
+    </div>
+  </div>
+
+<script>
+const token = localStorage.getItem("token");
+const payload = token ? JSON.parse(atob(token.split(".")[1])) : null;
+const profileId = payload?.userId;
+console.log("User ID is:", profileId);
+
+if (!profileId) {
+  alert("Session expired or invalid. Please login again.");
+  window.location.href = "./login.html";
+}
+
+function getAge(dobString) {
+  const dob = new Date(dobString);
+  const diff = Date.now() - dob.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+}
+
+function formatDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "/";
+}
+
+async function loadProfile() {
+  try {
+    const res = await fetch(`/api/user/${profileId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to load profile");
+
+    const { profile, itineraries, reviews } = data;
+
+    // Basic Info
+    document.getElementById("name").innerText = profile.firstName || "N/A";
+    document.getElementById("age-gender").innerText = `Age: ${getAge(profile.dob)} • ${profile.gender}`;
+    document.getElementById("travel-type").innerText = `Travel Type: ${profile.travelType}`;
+    document.getElementById("interests").innerText = `Interests: ${profile.interests.join(", ")}`;
+    document.getElementById("bio").innerText = profile.bio || "No bio added";
+    document.getElementById("location").innerText = `Location: ${profile.location || "Unknown"}`;
+
+    // Social Links
+    if (profile.socialLinks) {
+      const insta = document.getElementById("instagramLink");
+      const linkedin = document.getElementById("linkedinLink");
+
+      if (profile.socialLinks.instagram) {
+        insta.href = profile.socialLinks.instagram;
+        insta.innerText = "@" + profile.socialLinks.instagram.split("/").pop();
+      }
+
+      if (profile.socialLinks.linkedin) {
+        linkedin.href = profile.socialLinks.linkedin;
+        linkedin.innerText = "/in/" + profile.socialLinks.linkedin.split("/").pop();
+      }
+    }
+
+    // Profile Photo
+    if (profile.profilePhoto) {
+      document.getElementById("main-photo").src = `/uploads/${profile.profilePhoto}`;
+    } else if (profile.photos.length > 0) {
+      document.getElementById("main-photo").src = `/uploads/${profile.photos[0]}`;
+    }
+
+    // Gallery
+    renderPhotoGallery(profile);
+
+    // Itineraries
+    const itineraryList = document.getElementById("itinerary-list");
+    itineraryList.innerHTML = "";
+    itineraries.forEach(item => {
+      const card = document.createElement("div");
+      card.className = "p-4 border rounded-lg bg-gray-100 relative";
+      card.innerHTML = `
+        <h4 class="text-lg font-semibold text-teal-700">${item.destination}</h4>
+        <p class="text-sm text-gray-700">From: ${formatDate(item.startDate)} → To: ${formatDate(item.endDate)}</p>
+        <p class="text-sm mt-1 text-gray-700">${item.description}</p>
+        <p class="text-xs text-gray-600 mt-1">Interests: ${item.interests.join(", ")}</p>
+        <button class="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded" onclick="deleteItinerary('${item._id}')">Delete</button>
+      `;
+      itineraryList.appendChild(card);
+    });
+
+    // Reviews
+    const reviewList = document.getElementById("review-list");
+    reviewList.innerHTML = "";
+    reviews.forEach(r => {
+      const div = document.createElement("div");
+      div.className = "bg-gray-700 p-4 rounded-lg border border-gray-600";
+      div.innerHTML = `
+        <div class="flex justify-between mb-2">
+          <span class="font-semibold">${r.reviewerName}</span>
+          <span class="text-yellow-500">⭐ ${r.rating}/5</span>
+        </div>
+        <p class="text-sm">${r.comment}</p>
+        <p class="text-xs text-gray-400 mt-1">${new Date(r.date).toLocaleDateString()}</p>
+      `;
+      reviewList.appendChild(div);
+    });
+
+    const reviewForm = document.getElementById("reviewForm");
+    const urlUserId = window.location.pathname.split("/").pop();
+    if (urlUserId === profileId) {
+      reviewForm.style.display = "none";
+    }
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+}
+
+function openEditForm() {
+  const editSection = document.getElementById("edit-profile");
+  if (!editSection) return alert("Edit form section not found.");
+  editSection.classList.remove("hidden");
+
+  const form = document.getElementById("editProfileForm");
+  fetch(`/api/user/${profileId}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(({ profile }) => {
+      form.firstName.value = profile.firstName;
+      form.dob.value = profile.dob.split("T")[0];
+      form.gender.value = profile.gender;
+      form.travelType.value = profile.travelType;
+      form.interests.value = profile.interests.join(", ");
+      form.bio.value = profile.bio || '';
+      form.location.value = profile.location || '';
+      form.instagram.value = profile.socialLinks?.instagram || '';
+      form.linkedin.value = profile.socialLinks?.linkedin || '';
+
+      populatePhotoDropdown(profile);
+    });
+}
+
+document.getElementById("editProfileForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const updatedData = {
+    firstName: form.firstName.value,
+    dob: form.dob.value,
+    gender: form.gender.value,
+    travelType: form.travelType.value,
+    interests: form.interests.value.split(",").map(i => i.trim()),
+    bio: form.bio.value,
+    location: form.location.value,
+    socialLinks: {
+      instagram: form.instagram.value,
+      linkedin: form.linkedin.value
+    },
+    profilePhoto: document.getElementById("profilePhotoSelect").value
+  };
+
+  try {
+    const res = await fetch(`/api/user/${profileId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(updatedData)
+    });
+
+    if (!res.ok) throw new Error("Failed to update profile");
+    alert("✅ Profile updated!");
+    window.location.reload();
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+});
+
+function renderPhotoGallery(profile) {
+  const gallery = document.getElementById("photo-gallery");
+  gallery.innerHTML = "";
+
+  if (!profile.photos || profile.photos.length === 0) {
+    gallery.innerHTML = "<p>No photos uploaded yet</p>";
+    return;
+  }
+
+  profile.photos.forEach(photo => {
+    const container = document.createElement("div");
+    container.className = "relative";
+
+    const img = document.createElement("img");
+    img.src = `/uploads/${photo}`;
+    img.className = "w-32 h-32 object-cover rounded-lg";
+
+    const setBtn = document.createElement("button");
+    setBtn.innerText = "Set as Profile";
+    setBtn.className = "absolute bottom-1 left-1 bg-yellow-300 text-xs px-2 py-1 rounded";
+    setBtn.onclick = async () => {
+      try {
+        const res = await fetch(`/api/user/${profileId}/set-profile-photo`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ filename: photo })
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.message);
+        alert("✅ Profile picture set!");
+        document.getElementById("main-photo").src = `/uploads/${photo}?t=${Date.now()}`;
+        document.getElementById("profilePhotoSelect").value = photo;
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    };
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.innerText = "Delete";
+    deleteBtn.className = "absolute top-1 right-1 bg-red-500 text-white text-xs px-2 py-1 rounded";
+    deleteBtn.onclick = async () => {
+      if (!confirm("Delete this photo permanently?")) return;
+      try {
+        const res = await fetch(`/api/user/${profileId}/delete-photo`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ filename: photo })
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.message);
+        alert("✅ Photo deleted!");
+        loadProfile();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    };
+
+    container.appendChild(img);
+    container.appendChild(setBtn);
+    container.appendChild(deleteBtn);
+    gallery.appendChild(container);
+  });
+
+  populatePhotoDropdown(profile);
+}
+
+function populatePhotoDropdown(profile) {
+  const photoDropdown = document.getElementById("profilePhotoSelect");
+  photoDropdown.innerHTML = '<option value="">-- Select from uploaded photos --</option>';
+  profile.photos.forEach(photo => {
+    const opt = document.createElement("option");
+    opt.value = photo;
+    opt.text = photo;
+    if (photo === profile.profilePhoto) opt.selected = true;
+    photoDropdown.appendChild(opt);
+  });
+}
+
+async function deleteProfile() {
+  if (!confirm("Are you sure you want to delete your profile permanently?")) return;
+
+  try {
+    const res = await fetch(`/api/profile/delete`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!res.ok) throw new Error("Failed to delete profile");
+
+    alert("✅ Profile deleted!");
+    localStorage.removeItem("token"); // Clear auth token
+    window.location.href = "/"; // Redirect to index.html
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+}
+
+async function deleteItinerary(id) {
+  if (!confirm("Delete this itinerary permanently?")) return;
+
+  try {
+    const res = await fetch(`/api/itinerary/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message);
+    alert("✅ Itinerary deleted!");
+    loadProfile();
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+}
+
+document.getElementById("photoInput").addEventListener("change", async function () {
+  const file = this.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("photo", file);
+
+  try {
+    const res = await fetch(`/api/user/${profileId}/upload-photo`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || "Failed to upload");
+
+    alert("✅ Photo uploaded!");
+    loadProfile();
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+});
+
+loadProfile();
+</script>
+</body>
+</html>

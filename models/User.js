@@ -1,18 +1,11 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  password: String, // hashed
-  name: String,
-  gender: String,
-  destination: String,
-  travelStart: Date,
-  travelEnd: Date,
-  interests: [String],
-  photo: String,
-  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  matches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  email: { type: String, required: true, unique: true },
+  passwordHash: String,
+  likes: [String],
+  dislikes: [String ], // Store email of disliked profiles
+  matches: [String]
 });
 
-module.exports = mongoose.model('User', userSchema);
+export default mongoose.model("User", userSchema);

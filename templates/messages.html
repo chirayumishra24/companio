@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Messages - Travel Companion</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .animate-bounceIn {
+      animation: bounceIn 0.5s ease-out;
+    }
+
+    @keyframes bounceIn {
+      0% {
+        transform: scale(0.7);
+        opacity: 0;
+      }
+
+      60% {
+        transform: scale(1.05);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-yellow-50 text-gray-900 font-sans">
+
+  <!-- Navbar -->
+  <header class="w-full px-6 py-4 bg-teal-500 shadow-md flex justify-between items-center sticky top-0 z-50">
+    <div class="text-2xl font-bold text-white">Companio</div>
+    <nav class="space-x-6 hidden md:flex items-center">
+      <a href="/matches" class="hover:text-yellow-100 text-white transition">Dashboard</a>
+      <a href="./messages" class="hover:text-yellow-100 font-semibold text-yellow-200">Messages</a>
+      <a href="/profile" class="hover:text-yellow-100 text-white transition">Profile</a>
+    </nav>
+    <img src="/static/images/default-avatar.png" alt="User" class="w-10 h-10 rounded-full border-2 border-yellow-300" />
+  </header>
+
+  <!-- Main Layout -->
+  <main class="flex min-h-screen flex-col md:flex-row">
+
+    <!-- Sidebar -->
+    <aside class="w-full md:w-1/4 bg-teal-100 p-6 shadow-inner">
+      <h2 class="text-lg font-semibold mb-4 text-teal-800">Matches</h2>
+      <ul id="user-list" class="space-y-4">
+        <!-- Populated dynamically -->
+      </ul>
+    </aside>
+
+    <!-- Chat Section -->
+    <section class="flex-1 bg-white p-6 flex flex-col shadow-inner rounded-tl-3xl">
+      <div id="chat-header" class="text-xl font-bold text-teal-600 mb-4">Select a match to chat</div>
+      <div id="chat-box" class="flex-1 overflow-y-auto space-y-4 px-2"></div>
+      <div id="typing-indicator" class="text-sm text-gray-500 mt-2 px-2"></div>
+
+      <!-- Emoji Row -->
+      <div class="flex gap-2 mt-2 px-2 text-xl">
+        <button onclick="insertEmoji('😊')" class="hover:scale-125 transition">😊</button>
+        <button onclick="insertEmoji('❤️')" class="hover:scale-125 transition">❤️</button>
+        <button onclick="insertEmoji('😂')" class="hover:scale-125 transition">😂</button>
+        <button onclick="insertEmoji('✈️')" class="hover:scale-125 transition">✈️</button>
+      </div>
+
+      <!-- Message Input -->
+      <form id="chat-form" class="mt-4 flex items-center gap-3">
+        <input id="chat-input" type="text" placeholder="Type a message..."
+          class="flex-1 border border-yellow-400 rounded-lg px-4 py-2 bg-yellow-100 text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400" />
+        <button type="submit" class="bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-600">Send</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    /* -----------------------------------------------------------
+     *  Messaging client
+     *  – handles auth header
+     *  – uses E‑MAIL (not _id) as chat key
+     *  – defensive‑checks res.ok before looping
+     * ----------------------------------------------------------- */
+    (() => {
+      const token = localStorage.getItem("token");
+      if (!token) { location.href = "/login"; return; }
+    
+      let meEmail      = null;   // my e‑mail
+      let partnerEmail = null;   // chat we’re viewing
+    
+      /* DOM refs */
+      const listUl   = document.getElementById("user-list");
+      const headerEl = document.getElementById("chat-header");
+      const chatBox  = document.getElementById("chat-box");
+      const typingEl = document.getElementById("typing-indicator");
+      const inputEl  = document.getElementById("chat-input");
+    
+      /* helpers */
+      const bubble = (msg) => {
+        const div = document.createElement("div");
+        div.className =
+          `max-w-[70%] px-4 py-2 rounded-xl text-sm shadow animate-bounceIn ${
+            msg.sender === meEmail
+              ? "bg-yellow-300 text-gray-900 self-end ml-auto"
+              : "bg-teal-100 text-gray-800"
+          }`;
+        div.textContent = msg.content;
+        return div;
+      };
+    
+      /* ───────── get my email ───────── */
+      async function me() {
+        const r = await fetch("/api/me", { headers:{Authorization:`Bearer ${token}`}});
+        const j = await r.json();
+        meEmail = j.email;
+      }
+    
+      /* ───────── list matches ───────── */
+      async function loadMatches() {
+        const r  = await fetch("/api/mutual-matches",
+                   { headers:{Authorization:`Bearer ${token}`}});
+        const arr = await r.json();
+        listUl.innerHTML = "";
+    
+        arr.forEach(u => {
+          const li = document.createElement("li");
+          li.className = "cursor-pointer hover:bg-yellow-200 p-2 rounded-lg flex items-center gap-3";
+          li.innerHTML = `
+            <img src="${u.image}" class="w-10 h-10 rounded-full"/>
+            <div>
+              <p class="font-semibold text-teal-900">${u.name}</p>
+              <p class="text-xs text-teal-700">${u.destination}</p>
+            </div>`;
+          li.onclick = () => openChat(u.email, u.name);   // 🟢 USE e‑mail
+          listUl.appendChild(li);
+        });
+      }
+    
+      /* ───────── open chat & fetch history ───────── */
+      async function openChat(email, name) {
+        partnerEmail   = email;
+        headerEl.textContent = `Chatting with ${name}`;
+        chatBox.innerHTML    = "";
+    
+        const res = await fetch(`/api/messages?user1=${encodeURIComponent(meEmail)}&user2=${encodeURIComponent(email)}`,
+                     { headers:{Authorization:`Bearer ${token}`}});
+    
+        /* fallback if token expired */
+        if (!res.ok) {
+          alert("Session expired – please log in again.");
+          localStorage.removeItem("token");
+          return location.href = "/login";
+        }
+    
+        const msgs = await res.json();   // guaranteed array now
+        msgs.forEach(m => chatBox.appendChild(bubble(m)));
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+    
+      /* ───────── send via socket.io ───────── */
+      const socket = io();
+      document.getElementById("chat-form").onsubmit = e => {
+        e.preventDefault();
+        const txt = inputEl.value.trim();
+        if (!txt || !partnerEmail) return;
+    
+        const msg = { sender:meEmail, receiver:partnerEmail, content:txt };
+        socket.emit("sendMessage", msg);
+        inputEl.value = "";
+      };
+    
+      /* ───────── receive ───────── */
+      socket.on("newMessage", (m) => {
+        const mine = (m.sender === meEmail && m.receiver === partnerEmail);
+        const theirs = (m.sender === partnerEmail && m.receiver === meEmail);
+        if (mine || theirs) {
+          chatBox.appendChild(bubble(m));
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }
+      });
+    
+      /* ───────── tiny extras ───────── */
+      window.insertEmoji = e => { inputEl.value += e; inputEl.focus(); };
+    
+      /* kick‑off */
+      (async () => { await me(); await loadMatches(); })();
+    })();
+    </script>
+    
+</body>
+
+</html>

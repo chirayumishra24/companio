@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>View Profile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen">
+
+  <!-- 🌐 Navbar -->
+  <nav class="bg-white shadow sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+      <a href="/" class="text-xl font-bold text-blue-600">Companio</a>
+      <div class="space-x-4">
+        <a href="/home" class="text-gray-700 hover:text-blue-600">Home</a>
+        <a href="/matches" class="text-gray-700 hover:text-blue-600">Matches</a>
+        <a href="/my-profile" class="text-gray-700 hover:text-blue-600">My Profile</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 📄 Profile Content -->
+  <div class="max-w-4xl mx-auto p-6 space-y-6">
+
+    <!-- Profile Photo + Name -->
+    <div class="flex items-center space-x-4">
+      <img id="profilePhoto" src="/static/images/default-avatar.png" alt="Profile" class="w-24 h-24 rounded-full border-4 border-white shadow-lg" />
+      <div>
+        <h1 id="userName" class="text-2xl font-bold">Loading...</h1>
+        <p id="userLocation" class="text-sm text-gray-500">Location: N/A</p>
+      </div>
+    </div>
+
+    <!-- Bio -->
+    <div>
+      <h2 class="text-xl font-semibold mb-1">Bio</h2>
+      <p id="userBio" class="bg-white p-3 rounded shadow">No bio available.</p>
+    </div>
+
+    <!-- Interests -->
+    <div>
+      <h2 class="text-xl font-semibold mb-1">Interests</h2>
+      <div id="userInterests" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- Gallery -->
+    <div>
+      <h2 class="text-xl font-semibold mb-1">Gallery</h2>
+      <div id="userPhotos" class="grid grid-cols-3 gap-4"></div>
+    </div>
+
+    <!-- Itineraries -->
+    <div>
+      <h2 class="text-xl font-semibold mb-1">Itineraries</h2>
+      <div id="userItineraries" class="space-y-2"></div>
+    </div>
+
+    <!-- Add Review Form -->
+<div class="bg-white p-4 rounded shadow mt-6">
+  <h2 class="text-xl font-semibold mb-2">Leave a Review</h2>
+  <form id="reviewForm" class="space-y-3">
+    <input type="text" id="reviewerName" placeholder="Your Name" required class="w-full p-2 border rounded" />
+    <input type="number" id="reviewRating" placeholder="Rating (1-5)" min="1" max="5" required class="w-full p-2 border rounded" />
+    <textarea id="reviewComment" placeholder="Write your feedback..." required class="w-full p-2 border rounded"></textarea>
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit Review</button>
+  </form>
+</div>
+
+
+  </div>
+
+  <script>
+    (() => {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    alert("Please log in again.");
+    location.href = "/login";
+    return;
+  }
+
+  const stored = JSON.parse(localStorage.getItem("selectedProfile") || "{}");
+  const userId = new URLSearchParams(location.search).get("userId") || stored.userId;
+
+  if (!userId) {
+    alert("User not found.");
+    history.back();
+    return;
+  }
+
+  const els = {
+    photo: document.getElementById("profilePhoto"),
+    name: document.getElementById("userName"),
+    loc: document.getElementById("userLocation"),
+    bio: document.getElementById("userBio"),
+    ints: document.getElementById("userInterests"),
+    pics: document.getElementById("userPhotos"),
+    itins: document.getElementById("userItineraries"),
+    reviews: document.getElementById("userReviews"),
+  };
+
+  const chip = (t) => {
+    const s = document.createElement("span");
+    s.className = "bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-sm";
+    s.textContent = t;
+    return s;
+  };
+
+  async function loadProfile() {
+    try {
+      const res = await fetch(`/api/user/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Fetch error");
+
+      const { profile, itineraries, reviews } = await res.json();
+
+      if (!profile) throw new Error("Profile data missing");
+
+      profilePhoto.src = profile.profilePhoto
+  ? `/uploads/${profile.profilePhoto}`
+  : `/static/images/default-avatar.png`; // ✅ make sure this path exists
+
+      els.name.textContent = profile.firstName || "Unnamed";
+      els.loc.textContent = `Location: ${profile.location || "N/A"}`;
+      els.bio.textContent = profile.bio || "No bio available";
+
+      els.ints.innerHTML = "";
+      (profile.interests || []).forEach((i) => els.ints.appendChild(chip(i)));
+
+      els.pics.innerHTML = "";
+      (profile.photos || []).forEach((p) => {
+        const img = new Image();
+        img.src = `/uploads/${p}`;
+        img.className = "rounded shadow w-full h-40 object-cover";
+        els.pics.appendChild(img);
+      });
+
+      els.itins.innerHTML = itineraries.length
+        ? ""
+        : "<p class='text-gray-500'>No itineraries yet.</p>";
+      itineraries.forEach((it) => {
+        const d = document.createElement("div");
+        d.className = "bg-white p-3 rounded shadow";
+        d.innerHTML = `
+          <h3 class="font-bold">${it.destination || "Trip"}</h3>
+          <p>${it.description || ""}</p>
+          <p class="text-sm text-gray-500">
+            ${new Date(it.startDate).toLocaleDateString()} – 
+            ${new Date(it.endDate).toLocaleDateString()}
+          </p>`;
+        els.itins.appendChild(d);
+      });
+
+      renderReviews(reviews || []);
+    } catch (e) {
+      console.error("❌ loadProfile error:", e);
+      alert("Failed to load profile.");
+    }
+  }
+
+  function renderReviews(rs) {
+    if (!els.reviews) return console.warn("#userReviews missing");
+
+    els.reviews.innerHTML = rs.length
+      ? ""
+      : "<p class='text-gray-500'>No reviews yet.</p>";
+
+    rs.forEach((r) => {
+      const d = document.createElement("div");
+      d.className = "bg-white p-3 rounded shadow";
+      d.innerHTML = `
+        <div class="flex justify-between">
+          <span class="font-semibold">${r.reviewerName}</span>
+          <span class="text-yellow-500">⭐ ${r.rating}</span>
+        </div>
+        <p class="mt-1">${r.comment}</p>
+        <p class="text-sm text-gray-400">
+          ${new Date(r.date).toLocaleDateString()}
+        </p>`;
+      els.reviews.appendChild(d);
+    });
+  }
+
+  document.addEventListener("submit", async (evt) => {
+    if (evt.target.id !== "reviewForm") return;
+    evt.preventDefault();
+
+    const rating = parseInt(document.getElementById("reviewRating").value);
+    const comment = document.getElementById("reviewComment").value.trim();
+
+    if (!rating || rating < 1 || rating > 5 || !comment) {
+      return alert("Give a rating (1‑5) and a comment.");
+    }
+
+    try {
+      const res = await fetch(`/api/review/${userId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ rating, comment }),
+      });
+
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.message || "Submit failed");
+
+      alert("Review submitted!");
+      evt.target.reset();
+      loadProfile();
+    } catch (err) {
+      console.error("❌ Review submit error:", err);
+      alert("Could not submit review.");
+    }
+  });
+
+  loadProfile();
+})();
+
+    </script>
+</body>
+</html>
