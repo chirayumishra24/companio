@@ -1,9 +1,9 @@
 import { useRef, useState, useEffect } from "react";
 import { motion, useAnimation, useMotionValue } from "framer-motion";
 
-const CAROUSEL_RADIUS = 300; // Radius of the 3D cylinder
-const ITEM_WIDTH = 250;
-const ITEM_HEIGHT = 350;
+const CAROUSEL_RADIUS = 350; // Increased radius for better spacing
+const ITEM_WIDTH = 260;
+const ITEM_HEIGHT = 380;
 
 export default function ParallaxCarousel({ items }) {
     const [isClient, setIsClient] = useState(false);
@@ -20,34 +20,46 @@ export default function ParallaxCarousel({ items }) {
             transition: {
                 repeat: Infinity,
                 ease: "linear",
-                duration: 25,
+                duration: 45, // Much slower rotation
             },
         });
     }, [controls]);
 
     if (!isClient) return null;
 
-    const handleDrag = (_, info) => {
-        // Stop auto-rotation on drag
+    const handleMouseEnter = () => {
         controls.stop();
-        // Increase rotation based on drag offset
-        rotationY.set(rotationY.get() + info.offset.x * 0.5);
     };
 
-    const handleDragEnd = () => {
-        // Resume auto-rotation from current angle
+    const handleMouseLeave = () => {
         controls.start({
             rotateY: rotationY.get() + 360,
             transition: {
                 repeat: Infinity,
                 ease: "linear",
-                duration: 25,
+                duration: 45,
             },
         });
     };
 
+    const handleDrag = (_, info) => {
+        // Stop auto-rotation on drag
+        controls.stop();
+        // Increase rotation based on drag offset
+        rotationY.set(rotationY.get() + info.delta.x * 0.3); // Smoother drag delta
+    };
+
+    const handleDragEnd = () => {
+        handleMouseLeave(); // Reuse logic to restart auto-rotation
+    };
+
     return (
-        <div className="relative w-full overflow-hidden flex flex-col items-center justify-center py-20" style={{ perspective: "1000px" }}>
+        <div
+            className="relative w-full overflow-hidden flex flex-col items-center justify-center py-24"
+            style={{ perspective: "2000px" }} // Increased perspective to prevent "spinning out"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+        >
 
             <motion.div
                 ref={containerRef}
