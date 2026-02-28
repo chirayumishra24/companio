@@ -1,11 +1,14 @@
-import mongoose from "mongoose";
+import { createFirestoreModel } from "../lib/firestoreModel.js";
 
-const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  passwordHash: String,
-  likes: [String],
-  dislikes: [String ], // Store email of disliked profiles
-  matches: [String]
+const User = createFirestoreModel("users", {
+  defaults: {
+    email: "",
+    passwordHash: "",
+    likes: [],
+    dislikes: [],
+    matches: [],
+  },
+  timestamps: true,
 });
 
-export default mongoose.model("User", userSchema);
+export default User;

@@ -3,6 +3,12 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE, authHeaders, getToken, setToken } from '../lib/config';
 
+function resolveNextPath(nextValue) {
+    if (!nextValue || typeof nextValue !== 'string') return '/matches';
+    if (!nextValue.startsWith('/') || nextValue.startsWith('//')) return '/matches';
+    return nextValue;
+}
+
 export default function ProfileSetup() {
     const [formData, setFormData] = useState({
         firstName: '',
@@ -18,8 +24,14 @@ export default function ProfileSetup() {
     React.useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const tokenFromQuery = params.get("token");
+        const rawNext = params.get("next");
+        if (rawNext) {
+            sessionStorage.setItem("postProfileSetupNext", resolveNextPath(rawNext));
+        }
         if (tokenFromQuery) {
             setToken(tokenFromQuery);
+        }
+        if (tokenFromQuery || rawNext) {
             window.history.replaceState({}, "", "/profile-setup");
         }
     }, []);
@@ -53,7 +65,9 @@ export default function ProfileSetup() {
                     'Content-Type': 'multipart/form-data'
                 }
             });
-            navigate('/matches');
+            const nextPath = resolveNextPath(sessionStorage.getItem("postProfileSetupNext") || "");
+            sessionStorage.removeItem("postProfileSetupNext");
+            navigate(nextPath);
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to save profile.');
         }

@@ -1,87 +1,100 @@
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import Hero from './pages/Hero';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import Matches from './pages/Matches';
-import ProfileSetup from './pages/ProfileSetup';
-import Messages from './pages/Messages';
-import SetPassword from './pages/SetPassword'; // Newly pulled from user commits
+import { useEffect, useState } from "react";
+import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Hero from "./pages/Hero";
+import ItineraryAssistant from "./pages/ItineraryAssistant";
+import Login from "./pages/Login";
+import Matches from "./pages/Matches";
+import Messages from "./pages/Messages";
+import NotFound from "./pages/NotFound";
+import ProfileSetup from "./pages/ProfileSetup";
+import SetPassword from "./pages/SetPassword";
+import Signup from "./pages/Signup";
+import { clearToken, getToken, setToken } from "./lib/config";
+
+const navLinkClass = "neo-btn py-2 px-4 shadow-brutal-sm text-sm border-2";
 
 function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+    if (!token) return;
+
+    setToken(token);
+    params.delete("token");
+    const cleanSearch = params.toString();
+    const cleanUrl = `${location.pathname}${cleanSearch ? `?${cleanSearch}` : ""}`;
+    navigate(cleanUrl, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
+  const isAuthenticated = Boolean(getToken());
+
+  const logout = () => {
+    clearToken();
+    navigate("/login", { replace: true });
+  };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <nav className="border-b-8 border-black bg-brutal-yellow py-4 px-6 flex justify-between items-center z-50 sticky top-0 overflow-hidden shadow-brutal-sm">
-        <Link to="/" className="inline-block relative">
-          <motion.div
-            className="text-4xl md:text-5xl font-black tracking-tighter flex origin-left"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: { opacity: 0, x: -50 },
-              visible: {
-                opacity: 1,
-                x: 0,
-                transition: { staggerChildren: 0.1, duration: 0.5, ease: "backOut" }
-              }
-            }}
-          >
-            {['C', 'O', 'M', 'P', 'A', 'N', 'I', 'O', '.'].map((letter, idx) => (
-              <motion.span
-                key={idx}
-                className="inline-block hover:text-brutal-pink hover:-translate-y-2 transition-transform duration-100"
-                variants={{
-                  hidden: { y: -20, opacity: 0 },
-                  visible: { y: 0, opacity: 1 }
-                }}
-                whileHover={{ scale: 1.2, rotate: (idx % 2 === 0 ? 15 : -15) }}
-              >
-                {letter}
-              </motion.span>
-            ))}
-          </motion.div>
-        </Link>
+    <div className="min-h-screen bg-brutal-bg">
+      <nav className="border-b-4 border-black bg-brutal-yellow p-4 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <Link to="/" className="text-3xl font-black tracking-tighter hover:-translate-y-1 transition-transform inline-block">
+            COMPANIO.
+          </Link>
 
-        <div className="flex gap-4">
-          <Link to="/matches" className="neo-btn bg-brutal-cyan py-3 px-6 shadow-brutal text-sm uppercase md:text-base hidden sm:block">Matches</Link>
-          <Link to="/login" className="neo-btn bg-white py-3 px-6 shadow-brutal text-sm uppercase md:text-base">Login</Link>
-          <Link to="/signup" className="neo-btn bg-brutal-pink py-3 px-6 shadow-brutal text-sm uppercase text-white md:text-base">Signup</Link>
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            className="md:hidden neo-btn bg-white px-3 py-2 text-xs"
+            aria-label="Toggle navigation"
+          >
+            MENU
+          </button>
+
+          <div className={`${mobileOpen ? "flex" : "hidden"} w-full md:w-auto md:flex gap-2 md:gap-3 flex-col md:flex-row`}>
+            <Link to="/" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>HOME</Link>
+            {isAuthenticated ? (
+              <>
+                <Link to="/matches" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-cyan text-center`}>DISCOVER</Link>
+                <Link to="/messages" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-green text-center`}>MESSAGES</Link>
+                <Link to="/itinerary-assistant" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>AI TRIP</Link>
+                <Link to="/profile-setup" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>PROFILE</Link>
+                <button type="button" onClick={logout} className={`${navLinkClass} bg-black text-white text-center`}>
+                  LOGOUT
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>LOGIN</Link>
+                <Link to="/signup" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>SIGNUP</Link>
+              </>
+            )}
+          </div>
         </div>
       </nav>
 
-      {/* Main Content Area w/ AnimatePresence Smooth Page Transitions */}
-      <main className="flex-1 relative">
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            {/* We wrap each page component in an animated PageWrapper */}
-            <Route path="/" element={<PageWrapper><Hero /></PageWrapper>} />
-            <Route path="/login" element={<PageWrapper><Login /></PageWrapper>} />
-            <Route path="/signup" element={<PageWrapper><Signup /></PageWrapper>} />
-            <Route path="/set-password" element={<PageWrapper><SetPassword /></PageWrapper>} />
-            <Route path="/matches" element={<PageWrapper><Matches /></PageWrapper>} />
-            <Route path="/profile-setup" element={<PageWrapper><ProfileSetup /></PageWrapper>} />
-            <Route path="/messages/:matchId?" element={<PageWrapper><Messages /></PageWrapper>} />
-          </Routes>
-        </AnimatePresence>
+      <main className="min-h-[calc(100vh-84px)]">
+        <Routes>
+          <Route path="/" element={<Hero />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/set-password" element={<SetPassword />} />
+
+          <Route element={<ProtectedRoute />}>
+            <Route path="/matches" element={<Matches />} />
+            <Route path="/profile-setup" element={<ProfileSetup />} />
+            <Route path="/itinerary-assistant" element={<ItineraryAssistant />} />
+            <Route path="/messages/:matchId?" element={<Messages />} />
+          </Route>
+
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </main>
     </div>
-  )
-}
-
-function PageWrapper({ children }) {
-  // A brutalism-styled "wipe" transition
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 50, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -50, scale: 0.98 }}
-      transition={{ duration: 0.4, ease: "anticipate" }}
-      className="w-full h-full"
-    >
-      {children}
-    </motion.div>
   );
 }
 

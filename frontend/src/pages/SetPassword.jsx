@@ -3,6 +3,12 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_BASE, setToken } from "../lib/config";
 
+function resolveNextPath(nextValue) {
+  if (!nextValue || typeof nextValue !== "string") return "/matches";
+  if (!nextValue.startsWith("/") || nextValue.startsWith("//")) return "/matches";
+  return nextValue;
+}
+
 function decodeEmail(token) {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
@@ -22,11 +28,23 @@ export default function SetPassword() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenFromQuery = params.get("token");
+    const rawNext = params.get("next");
+    const nextFromQuery = rawNext ? resolveNextPath(rawNext) : "";
     const stored = sessionStorage.getItem("pendingSetPasswordToken");
+    const storedNext = resolveNextPath(sessionStorage.getItem("pendingSetPasswordNext") || "");
     const resolved = tokenFromQuery || stored || "";
 
     if (tokenFromQuery) {
       sessionStorage.setItem("pendingSetPasswordToken", tokenFromQuery);
+    }
+
+    if (nextFromQuery) {
+      sessionStorage.setItem("pendingSetPasswordNext", nextFromQuery);
+    } else if (storedNext) {
+      sessionStorage.setItem("pendingSetPasswordNext", storedNext);
+    }
+
+    if (tokenFromQuery || params.get("next")) {
       window.history.replaceState({}, "", "/set-password");
     }
 
@@ -61,7 +79,9 @@ export default function SetPassword() {
         await axios.get(`${API_BASE}/api/profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        navigate("/matches", { replace: true });
+        const nextPath = resolveNextPath(sessionStorage.getItem("pendingSetPasswordNext") || "");
+        sessionStorage.removeItem("pendingSetPasswordNext");
+        navigate(nextPath, { replace: true });
       } catch {
         navigate("/profile-setup", { replace: true });
       }

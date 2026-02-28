@@ -1,27 +1,26 @@
-import mongoose from "mongoose";
+import { createFirestoreModel } from "../lib/firestoreModel.js";
 
-const profileSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  email: { type: String, required: true, unique: true },
-  firstName: String,
-  dob: String,
-  gender: String,
-  showGender: Boolean,
-  interestedIn: String,
-  travelType: String,
-  bio: String,
-  location: String,
-  socialLinks: {
-    instagram: String,
-    linkedin: String
+const Profile = createFirestoreModel("profiles", {
+  defaults: {
+    userId: "",
+    email: "",
+    firstName: "",
+    dob: "",
+    gender: "",
+    showGender: false,
+    interestedIn: "",
+    travelType: "",
+    bio: "",
+    location: "",
+    socialLinks: {
+      instagram: "",
+      linkedin: "",
+    },
+    interests: [],
+    photos: [],
+    profilePhoto: "",
   },
-  interests:[String],
-  photos: [String],
-  profilePhoto: String,
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  timestamps: true,
 });
-
-const Profile = mongoose.models.Profile || mongoose.model("Profile", profileSchema);
 
 export default Profile;

@@ -1,9 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRive, useStateMachineInput } from '@rive-app/react-canvas';
+import { useRive } from '@rive-app/react-canvas';
 import { API_BASE, setToken } from '../lib/config';
+
+function resolveNextPath(nextValue) {
+    if (!nextValue || typeof nextValue !== 'string') return '/matches';
+    if (!nextValue.startsWith('/')) return '/matches';
+    if (nextValue.startsWith('//')) return '/matches';
+    return nextValue;
+}
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -12,10 +19,12 @@ export default function Login() {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
+    const nextPath = resolveNextPath(new URLSearchParams(location.search).get('next'));
+    const oauthError = new URLSearchParams(location.search).get('error');
+    const Motion = motion;
 
-    // Rive Mascot Setup
-    const { RiveComponent, rive } = useRive({
-        src: 'https://cdn.rive.app/animations/vehicles.riv', // Placeholder mascot
+    const { RiveComponent } = useRive({
+        src: 'https://cdn.rive.app/animations/vehicles.riv',
         stateMachines: 'bumpy',
         autoplay: true,
     });
@@ -25,13 +34,9 @@ export default function Login() {
         const token = params.get('token');
         if (token) {
             setToken(token);
-            navigate('/matches', { replace: true });
+            navigate(nextPath, { replace: true });
         }
-        const oauthError = params.get('error');
-        if (oauthError) {
-            setError('Google login is not configured or failed on server.');
-        }
-    }, [location.search, navigate]);
+    }, [location.search, nextPath, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -44,7 +49,7 @@ export default function Login() {
 
             setToken(response.data.token);
             if (response.data.profileSetupComplete) {
-                navigate('/matches');
+                navigate(nextPath);
             } else {
                 navigate('/profile-setup');
             }
@@ -54,14 +59,13 @@ export default function Login() {
     };
 
     const handleGoogleLogin = () => {
-        window.location.href = `${API_BASE}/auth/google`;
+        const encodedNext = encodeURIComponent(nextPath);
+        window.location.href = `${API_BASE}/auth/google?next=${encodedNext}`;
     };
 
     return (
         <div className="min-h-screen bg-brutal-cyan flex flex-col md:flex-row items-center justify-center p-4 layout-bg-pattern gap-8 overflow-hidden">
-
-            {/* Mascot Container - Visible on md+ screens */}
-            <motion.div
+            <Motion.div
                 initial={{ x: -100, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 className="hidden md:flex flex-col items-center justify-center"
@@ -72,10 +76,9 @@ export default function Login() {
                 <div className="mt-6 bg-brutal-yellow border-4 border-black px-6 py-2 font-black text-xl rotate-3 shadow-brutal-sm">
                     TRAVELED RECENTLY?
                 </div>
-            </motion.div>
+            </Motion.div>
 
-            {/* Login Card */}
-            <motion.div
+            <Motion.div
                 initial={{ scale: 0.9, opacity: 0, rotate: -2 }}
                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
                 className="neo-card w-full max-w-md bg-white relative z-10"
@@ -87,20 +90,29 @@ export default function Login() {
                 <h2 className="text-4xl font-black mb-6 uppercase border-b-8 border-black pb-4 text-center">Identity Check</h2>
 
                 <AnimatePresence>
-                    {error && (
-                        <motion.div
+                    {error ? (
+                        <Motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="bg-red-500 text-white font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
                         >
                             {error}
-                        </motion.div>
-                    )}
+                        </Motion.div>
+                    ) : oauthError ? (
+                        <Motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="bg-red-500 text-white font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
+                        >
+                            Google login is not configured or failed on server.
+                        </Motion.div>
+                    ) : null}
                 </AnimatePresence>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <motion.div
+                    <Motion.div
                         initial={{ x: -20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: 0.1 }}
@@ -114,9 +126,9 @@ export default function Login() {
                             onChange={(e) => setEmail(e.target.value)}
                             required
                         />
-                    </motion.div>
+                    </Motion.div>
 
-                    <motion.div
+                    <Motion.div
                         initial={{ x: -20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: 0.2 }}
@@ -124,7 +136,7 @@ export default function Login() {
                         <label className="block text-xl font-black uppercase mb-2">Secret Code</label>
                         <div className="relative">
                             <input
-                                type={isPasswordVisible ? "text" : "password"}
+                                type={isPasswordVisible ? 'text' : 'password'}
                                 className="neo-input bg-brutal-bg text-lg pr-12"
                                 placeholder="••••••••"
                                 value={password}
@@ -136,38 +148,38 @@ export default function Login() {
                                 onClick={() => setIsPasswordVisible(!isPasswordVisible)}
                                 className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-sm uppercase underline decoration-2 underline-offset-2"
                             >
-                                {isPasswordVisible ? "Hide" : "Show"}
+                                {isPasswordVisible ? 'Hide' : 'Show'}
                             </button>
                         </div>
-                    </motion.div>
+                    </Motion.div>
 
-                    <motion.button
+                    <Motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         type="submit"
                         className="neo-btn bg-brutal-pink text-white w-full text-2xl uppercase tracking-tighter shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none translate-y-0 active:translate-y-2 transition-all p-4"
                     >
                         Enter Terminal
-                    </motion.button>
+                    </Motion.button>
                 </form>
 
                 <div className="my-8 border-b-4 border-black relative">
                     <span className="absolute bg-white px-4 font-black left-1/2 -translate-x-1/2 -top-3 text-sm">SOCIAL OVERRIDE</span>
                 </div>
 
-                <motion.button
+                <Motion.button
                     whileHover={{ scale: 1.02 }}
                     onClick={handleGoogleLogin}
                     className="neo-btn bg-white w-full text-lg uppercase flex items-center justify-center gap-3 border-4"
                 >
                     <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-6 h-6" />
                     Auth via Google
-                </motion.button>
+                </Motion.button>
 
                 <p className="mt-8 text-center font-bold text-lg">
                     New to the squad? <Link to="/signup" className="text-brutal-pink hover:underline inline-block border-b-2 border-transparent hover:border-brutal-pink uppercase">Join Here</Link>
                 </p>
-            </motion.div>
+            </Motion.div>
         </div>
     );
 }

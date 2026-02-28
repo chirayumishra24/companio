@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { motion, useAnimation, useMotionValue } from "framer-motion";
 
 const CAROUSEL_RADIUS = 350; // Increased radius for better spacing
@@ -6,15 +6,12 @@ const ITEM_WIDTH = 260;
 const ITEM_HEIGHT = 380;
 
 export default function ParallaxCarousel({ items }) {
-    const [isClient, setIsClient] = useState(false);
     const containerRef = useRef(null);
     const controls = useAnimation();
     const rotationY = useMotionValue(0);
+    const Motion = motion;
 
-    // We only run framer calculation after mount to avoid hydration mismatch
     useEffect(() => {
-        setIsClient(true);
-        // Start auto-rotation
         controls.start({
             rotateY: 360,
             transition: {
@@ -24,8 +21,6 @@ export default function ParallaxCarousel({ items }) {
             },
         });
     }, [controls]);
-
-    if (!isClient) return null;
 
     const handleMouseEnter = () => {
         controls.stop();
@@ -61,7 +56,7 @@ export default function ParallaxCarousel({ items }) {
             onMouseLeave={handleMouseLeave}
         >
 
-            <motion.div
+            <Motion.div
                 ref={containerRef}
                 className="relative flex items-center justify-center cursor-grab active:cursor-grabbing"
                 style={{
@@ -79,7 +74,7 @@ export default function ParallaxCarousel({ items }) {
                     // Calculate the angle for each item in the 3D cylinder
                     const angle = (360 / items.length) * index;
                     return (
-                        <motion.div
+                        <Motion.div
                             key={item.id}
                             className="absolute flex flex-col items-center justify-center p-6 border-4 border-black shadow-brutal neo-card select-none"
                             style={{
@@ -101,10 +96,10 @@ export default function ParallaxCarousel({ items }) {
                             <div className="mt-4 bg-black text-white px-3 py-1 font-bold text-sm transform rotate-2">
                                 ★ {item.rating}/5
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     );
                 })}
-            </motion.div>
+            </Motion.div>
         </div>
     );
 }

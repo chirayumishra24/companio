@@ -1,17 +1,18 @@
-import mongoose from 'mongoose';
+import { createFirestoreModel } from "../lib/firestoreModel.js";
 
-const itinerarySchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile', required: true },
-  destination: { type: String, required: true },
-  description: String,
-  startDate: Date,
-  endDate: Date,
-  budget: String,
-  travelType: String,
-  interests: [String],
-  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }],
-  createdAt: { type: Date, default: Date.now }
+const Itinerary = createFirestoreModel("itineraries", {
+  defaults: {
+    user: "",
+    destination: "",
+    description: "",
+    startDate: null,
+    endDate: null,
+    budget: "",
+    travelType: "",
+    interests: [],
+    likes: [],
+  },
+  timestamps: true,
 });
 
-const Itinerary = mongoose.models.Itinerary || mongoose.model('Itinerary', itinerarySchema);
 export default Itinerary;

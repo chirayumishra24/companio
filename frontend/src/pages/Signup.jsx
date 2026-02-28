@@ -11,6 +11,7 @@ export default function Signup() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const Motion = motion;
 
     // Rive Mascot for Signup
     const { RiveComponent } = useRive({
@@ -47,7 +48,7 @@ export default function Signup() {
         <div className="min-h-screen bg-brutal-yellow flex flex-col md:flex-row items-center justify-center p-4 layout-bg-pattern gap-8 overflow-hidden">
 
             {/* Signup Card */}
-            <motion.div
+            <Motion.div
                 initial={{ scale: 0.9, opacity: 0, rotate: 1 }}
                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
                 className="neo-card w-full max-w-md bg-white relative z-10"
@@ -56,19 +57,19 @@ export default function Signup() {
 
                 <AnimatePresence>
                     {error && (
-                        <motion.div
+                        <Motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="bg-red-500 text-white font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
                         >
                             {error}
-                        </motion.div>
+                        </Motion.div>
                     )}
                 </AnimatePresence>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <motion.div
+                    <Motion.div
                         initial={{ x: 20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: 0.1 }}
@@ -82,9 +83,9 @@ export default function Signup() {
                             onChange={(e) => setEmail(e.target.value)}
                             required
                         />
-                    </motion.div>
+                    </Motion.div>
 
-                    <motion.div
+                    <Motion.div
                         initial={{ x: 20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: 0.2 }}
@@ -98,9 +99,9 @@ export default function Signup() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                         />
-                    </motion.div>
+                    </Motion.div>
 
-                    <motion.div
+                    <Motion.div
                         initial={{ x: 20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: 0.3 }}
@@ -114,38 +115,38 @@ export default function Signup() {
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             required
                         />
-                    </motion.div>
+                    </Motion.div>
 
-                    <motion.button
+                    <Motion.button
                         whileHover={{ scale: 1.02, rotate: -1 }}
                         whileTap={{ scale: 0.98 }}
                         type="submit"
                         className="neo-btn bg-brutal-green text-black w-full text-2xl uppercase tracking-tighter shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none translate-y-0 active:translate-y-2 transition-all p-4 mt-4"
                     >
                         Initiate Voyage
-                    </motion.button>
+                    </Motion.button>
                 </form>
 
                 <div className="my-8 border-b-4 border-black relative">
                     <span className="absolute bg-white px-4 font-black left-1/2 -translate-x-1/2 -top-3 text-sm">GUEST PROTOCOL</span>
                 </div>
 
-                <motion.button
+                <Motion.button
                     whileHover={{ scale: 1.02 }}
                     onClick={handleGoogleLogin}
                     className="neo-btn bg-white w-full text-lg uppercase flex items-center justify-center gap-3 border-4"
                 >
                     <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-6 h-6" />
                     Passport via Google
-                </motion.button>
+                </Motion.button>
 
                 <p className="mt-8 text-center font-bold text-lg">
                     Back in the system? <Link to="/login" className="text-brutal-pink hover:underline inline-block border-b-2 border-transparent hover:border-brutal-pink uppercase font-black">Login Protocol</Link>
                 </p>
-            </motion.div>
+            </Motion.div>
 
             {/* Mascot Container */}
-            <motion.div
+            <Motion.div
                 initial={{ x: 100, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 className="hidden md:flex flex-col items-center justify-center order-first md:order-last"
@@ -156,7 +157,7 @@ export default function Signup() {
                 <div className="mt-6 bg-brutal-pink text-white border-4 border-black px-6 py-2 font-black text-xl -rotate-3 shadow-brutal-sm">
                     START THE ENGINE!
                 </div>
-            </motion.div>
+            </Motion.div>
         </div>
     );
 }
