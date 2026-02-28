@@ -76,7 +76,7 @@ app.get("/view-profile", (req, res) => {
 // Google OAuth
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 app.get("/auth/logout", (req, res) => {
-  req.logout(() => res.redirect("/login"));
+  req.logout(() => res.redirect("http://localhost:5175/login"));
 });
 app.get("/auth/google/callback",
   passport.authenticate("google", {
@@ -93,22 +93,22 @@ app.get("/auth/google/callback",
     const profile = await Profile.findOne({ email: req.user.email });
 
     if (!req.user.passwordHash) {
-      return res.redirect(`/set-password?token=${token}`);
+      return res.redirect(`http://localhost:5175/set-password?token=${token}`);
     }
 
     if (!profile) {
-      return res.redirect(`/profile-setup?token=${token}`);
+      return res.redirect(`http://localhost:5175/profile-setup?token=${token}`);
     }
 
     // ✅ Redirect to matches with token
-    res.redirect(`/matches?token=${token}`);
+    res.redirect(`http://localhost:5175/matches?token=${token}`);
   }
 );
 
 app.get('/login-success', (req, res) => {
   const token = req.query.token;
-  if (token) return res.redirect(`/login?token=${token}`);
-  return res.redirect('/login?error=missing_token');
+  if (token) return res.redirect(`http://localhost:5175/login?token=${token}`);
+  return res.redirect('http://localhost:5175/login?error=missing_token');
 });
 // JWT Middleware (updated with better logging)
 function authenticateToken(req, res, next) {
@@ -533,8 +533,8 @@ app.get("/api/matches", authenticateToken, async (req, res) => {
         const profilePhoto = profile.profilePhoto
           ? `/uploads/${profile.profilePhoto}`
           : (profile.photos?.length
-              ? `/uploads/${profile.photos.at(-1)}`
-              : "/static/images/default-avatar.png");
+            ? `/uploads/${profile.photos.at(-1)}`
+            : "/static/images/default-avatar.png");
 
         return {
           ...profile,
@@ -560,28 +560,28 @@ app.get("/api/mutual-matches", authenticateToken, async (req, res) => {
       matches: req.user.email
     });
 
-    const emails    = mutuals.map(u => u.email);
-    const profiles  = await Profile.find({ email: { $in: emails } });
+    const emails = mutuals.map(u => u.email);
+    const profiles = await Profile.find({ email: { $in: emails } });
 
     const merged = profiles.map(profile => {
       const matchUser = mutuals.find(u => u.email === profile.email);
 
       return {
         userId: profile.userId.toString(),        // 👈  ADD THIS LINE
-        _id   : profile._id,                      //   (profile doc id – kept if you still need it)
-        email : profile.email,
-        name  : profile.firstName || "Unknown",
-        image : profile.profilePhoto
-                 ? `/uploads/${profile.profilePhoto}`
-                 : (profile.photos?.length
-                     ? `/uploads/${profile.photos.at(-1)}`
-                     : "/static/images/default-avatar.png"),
-        destination : profile.location || "N/A",
-        startDate   : matchUser?.startDate || "2025‑07‑01",
-        endDate     : matchUser?.endDate   || "2025‑07‑07",
-        rating      : profile.rating || 4.5,
+        _id: profile._id,                      //   (profile doc id – kept if you still need it)
+        email: profile.email,
+        name: profile.firstName || "Unknown",
+        image: profile.profilePhoto
+          ? `/uploads/${profile.profilePhoto}`
+          : (profile.photos?.length
+            ? `/uploads/${profile.photos.at(-1)}`
+            : "/static/images/default-avatar.png"),
+        destination: profile.location || "N/A",
+        startDate: matchUser?.startDate || "2025‑07‑01",
+        endDate: matchUser?.endDate || "2025‑07‑07",
+        rating: profile.rating || 4.5,
         matchPercent: 70 + Math.floor(Math.random() * 20),
-        interests   : profile.interests || []
+        interests: profile.interests || []
       };
     });
 
@@ -597,11 +597,11 @@ app.get("/api/mutual-matches", authenticateToken, async (req, res) => {
  * ------------------------------------------------------------------ */
 app.post("/api/like", authenticateToken, async (req, res) => {
   try {
-    const userEmail   = req.user.email;
+    const userEmail = req.user.email;
     const { targetEmail } = req.body;
     if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
 
-    const me     = await User.findOne({ email: userEmail });
+    const me = await User.findOne({ email: userEmail });
     const target = await User.findOne({ email: targetEmail });
     if (!target) return res.status(404).json({ message: "Target user not found" });
 
@@ -633,7 +633,7 @@ app.post("/api/like", authenticateToken, async (req, res) => {
  * ------------------------------------------------------------------ */
 app.post("/api/dislike", authenticateToken, async (req, res) => {
   try {
-    const userEmail   = req.user.email;
+    const userEmail = req.user.email;
     const { targetEmail } = req.body;
     if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
 
@@ -675,7 +675,7 @@ app.get('/api/my-matches', authenticateToken, async (req, res) => {
 /* ----------------  GET conversation history  ---------------- */
 app.get("/api/messages", authenticateToken, async (req, res) => {
   const { user1, user2 } = req.query;
-  if (!user1 || !user2) return res.status(400).json({ message:"Missing params" });
+  if (!user1 || !user2) return res.status(400).json({ message: "Missing params" });
 
   try {
     const msgs = await Message.find({
@@ -687,7 +687,7 @@ app.get("/api/messages", authenticateToken, async (req, res) => {
     res.json(msgs);
   } catch (e) {
     console.error("Fetch messages error:", e);
-    res.status(500).json({ message:"Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -695,21 +695,21 @@ app.get("/api/messages", authenticateToken, async (req, res) => {
 app.post("/api/messages/send", authenticateToken, async (req, res) => {
   const { receiver, content } = req.body;
   const sender = req.user.email;
-  if (!receiver || !content)  return res.status(400).json({ message:"receiver & content required" });
-  if (sender === receiver)    return res.status(400).json({ message:"Cannot message yourself" });
+  if (!receiver || !content) return res.status(400).json({ message: "receiver & content required" });
+  if (sender === receiver) return res.status(400).json({ message: "Cannot message yourself" });
 
   /* confirm they are matched */
   const me = await User.findOne({ email: sender });
   if (!me.matches.includes(receiver))
-    return res.status(403).json({ message:"Only matched users can chat" });
+    return res.status(403).json({ message: "Only matched users can chat" });
 
   try {
-    const m = await Message.create({ sender, receiver, content, createdAt:new Date() });
+    const m = await Message.create({ sender, receiver, content, createdAt: new Date() });
     io.emit("newMessage", m);              // push via socket, too
     res.status(201).json(m);
   } catch (e) {
     console.error("Send msg error:", e);
-    res.status(500).json({ message:"Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -717,16 +717,16 @@ app.post("/api/messages/send", authenticateToken, async (req, res) => {
 app.get("/api/messages/conversations", authenticateToken, async (req, res) => {
   const me = req.user.email;
   try {
-    const msgs  = await Message.find({ $or:[{sender:me},{receiver:me}] });
+    const msgs = await Message.find({ $or: [{ sender: me }, { receiver: me }] });
     const other = new Set();
     msgs.forEach(m => {
-      if (m.sender   !== me) other.add(m.sender);
+      if (m.sender !== me) other.add(m.sender);
       if (m.receiver !== me) other.add(m.receiver);
     });
-    res.json({ users:[...other] });
+    res.json({ users: [...other] });
   } catch (e) {
     console.error("Conversation list error:", e);
-    res.status(500).json({ message:"Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -741,10 +741,10 @@ app.get("/api/me", authenticateToken, async (req, res) => {
     }
 
     res.json({
-  email: profile.email, // 👈 ADD THIS
-  firstName: profile.firstName,
-  profilePhoto: profile.profilePhoto ? `/uploads/${profile.profilePhoto}` : "/static/images/default-avatar.png"
-});
+      email: profile.email, // 👈 ADD THIS
+      firstName: profile.firstName,
+      profilePhoto: profile.profilePhoto ? `/uploads/${profile.profilePhoto}` : "/static/images/default-avatar.png"
+    });
 
   } catch (err) {
     console.error("❌ Error fetching user profile:", err);
