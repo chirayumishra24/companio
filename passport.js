@@ -26,8 +26,20 @@ if (isGoogleOAuthConfigured) {
         user = new User({
           email,
           // Keep password unset for OAuth-only accounts.
-          passwordHash: ""
+          passwordHash: "",
+          emailVerified: true,
+          likes: [],
+          dislikes: [],
+          matches: [],
+          blockedUsers: [],
+          reportedUsers: [],
+          refreshSessions: [],
         });
+        await user.save();
+      } else if (!user.emailVerified) {
+        user.emailVerified = true;
+        user.emailVerificationTokenHash = "";
+        user.emailVerificationExpiresAt = null;
         await user.save();
       }
 

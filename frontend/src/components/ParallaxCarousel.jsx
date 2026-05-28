@@ -76,7 +76,7 @@ export default function ParallaxCarousel({ items }) {
                     return (
                         <Motion.div
                             key={item.id}
-                            className="absolute flex flex-col items-center justify-center p-6 border-4 border-black shadow-brutal neo-card select-none"
+                            className="absolute flex flex-col items-center justify-center p-6 border-4 border-black shadow-brutal neo-card select-none transition-all duration-300 hover:scale-105 hover:-translate-y-2"
                             style={{
                                 width: ITEM_WIDTH,
                                 height: ITEM_HEIGHT,

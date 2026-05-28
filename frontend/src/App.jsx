@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Hero from "./pages/Hero";
 import ItineraryAssistant from "./pages/ItineraryAssistant";
@@ -10,7 +11,7 @@ import NotFound from "./pages/NotFound";
 import ProfileSetup from "./pages/ProfileSetup";
 import SetPassword from "./pages/SetPassword";
 import Signup from "./pages/Signup";
-import { clearToken, getToken, setToken } from "./lib/config";
+import { API_BASE, clearToken, getToken, setToken } from "./lib/config";
 
 const navLinkClass = "neo-btn py-2 px-4 shadow-brutal-sm text-sm border-2";
 
@@ -33,14 +34,19 @@ function App() {
 
   const isAuthenticated = Boolean(getToken());
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await axios.post(`${API_BASE}/auth/logout`);
+    } catch {
+      // ignore logout network errors and clear client state regardless
+    }
     clearToken();
     navigate("/login", { replace: true });
   };
 
   return (
     <div className="min-h-screen bg-brutal-bg">
-      <nav className="border-b-4 border-black bg-brutal-yellow p-4 sticky top-0 z-50">
+      <nav className="border-b-4 border-black bg-brutal-yellow/95 backdrop-blur-sm p-4 sticky top-0 z-50 shadow-[0_4px_0_0_rgba(0,0,0,1)]">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <Link to="/" className="text-3xl font-black tracking-tighter hover:-translate-y-1 transition-transform inline-block">
             COMPANIO.

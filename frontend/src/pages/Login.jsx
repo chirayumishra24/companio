@@ -15,12 +15,20 @@ function resolveNextPath(nextValue) {
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [resetPassword, setResetPassword] = useState('');
+    const [resetConfirmPassword, setResetConfirmPassword] = useState('');
     const [error, setError] = useState('');
+    const [info, setInfo] = useState('');
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [loadingAction, setLoadingAction] = useState(false);
+    const [needsVerification, setNeedsVerification] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
-    const nextPath = resolveNextPath(new URLSearchParams(location.search).get('next'));
-    const oauthError = new URLSearchParams(location.search).get('error');
+    const searchParams = new URLSearchParams(location.search);
+    const nextPath = resolveNextPath(searchParams.get('next'));
+    const oauthError = searchParams.get('error');
+    const verified = searchParams.get('verified');
+    const resetToken = searchParams.get('resetToken') || '';
     const Motion = motion;
 
     const { RiveComponent } = useRive({
@@ -41,6 +49,8 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setInfo('');
+        setNeedsVerification(false);
 
         try {
             const response = await axios.post(`${API_BASE}/auth/login`, {
@@ -54,7 +64,74 @@ export default function Login() {
                 navigate('/profile-setup');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Login failed. Please try again.');
+            const payload = err.response?.data || {};
+            setNeedsVerification(Boolean(payload.needsVerification));
+            setError(payload.message || 'Login failed. Please try again.');
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setError('');
+        setInfo('');
+        if (!email) {
+            setError('Enter your email first, then resend verification.');
+            return;
+        }
+        try {
+            setLoadingAction(true);
+            const { data } = await axios.post(`${API_BASE}/auth/verify/request`, { email });
+            setInfo(data?.message || 'Verification email sent.');
+        } catch (err) {
+            setError(err.response?.data?.message || 'Could not resend verification.');
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        setError('');
+        setInfo('');
+        if (!email) {
+            setError('Enter your email first, then request password reset.');
+            return;
+        }
+        try {
+            setLoadingAction(true);
+            const { data } = await axios.post(`${API_BASE}/auth/password-reset/request`, { email });
+            setInfo(data?.message || 'Password reset email sent.');
+        } catch (err) {
+            setError(err.response?.data?.message || 'Could not request password reset.');
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setError('');
+        setInfo('');
+        if (resetPassword.length < 8) {
+            setError('Password must be at least 8 characters.');
+            return;
+        }
+        if (resetPassword !== resetConfirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        try {
+            setLoadingAction(true);
+            const { data } = await axios.post(`${API_BASE}/auth/password-reset/confirm`, {
+                token: resetToken,
+                password: resetPassword,
+            });
+            setInfo(data?.message || 'Password reset complete.');
+            setResetPassword('');
+            setResetConfirmPassword('');
+            navigate('/login?reset=1', { replace: true });
+        } catch (err) {
+            setError(err.response?.data?.message || 'Could not reset password.');
+        } finally {
+            setLoadingAction(false);
         }
     };
 
@@ -108,8 +185,60 @@ export default function Login() {
                         >
                             Google login is not configured or failed on server.
                         </Motion.div>
+                    ) : verified === '1' ? (
+                        <Motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="bg-brutal-green text-black font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
+                        >
+                            Email verified successfully. You can login now.
+                        </Motion.div>
+                    ) : verified === '0' ? (
+                        <Motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="bg-red-500 text-white font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
+                        >
+                            Verification link invalid or expired. Request a new one.
+                        </Motion.div>
+                    ) : info ? (
+                        <Motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="bg-brutal-green text-black font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
+                        >
+                            {info}
+                        </Motion.div>
                     ) : null}
                 </AnimatePresence>
+
+                {resetToken ? (
+                    <form onSubmit={handleResetPassword} className="space-y-4 mb-6 bg-brutal-bg border-4 border-black p-4">
+                        <h3 className="font-black text-lg uppercase">Reset Password</h3>
+                        <input
+                            type="password"
+                            className="neo-input bg-white"
+                            placeholder="New password"
+                            value={resetPassword}
+                            onChange={(e) => setResetPassword(e.target.value)}
+                            required
+                        />
+                        <input
+                            type="password"
+                            className="neo-input bg-white"
+                            placeholder="Confirm new password"
+                            value={resetConfirmPassword}
+                            onChange={(e) => setResetConfirmPassword(e.target.value)}
+                            required
+                        />
+                        <button type="submit" disabled={loadingAction} className="neo-btn bg-brutal-green w-full">
+                            {loadingAction ? 'Updating...' : 'Update Password'}
+                        </button>
+                    </form>
+                ) : null}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <Motion.div
@@ -162,6 +291,27 @@ export default function Login() {
                         Enter Terminal
                     </Motion.button>
                 </form>
+
+                <div className="mt-4 flex flex-col gap-2">
+                    {needsVerification ? (
+                        <button
+                            type="button"
+                            onClick={handleResendVerification}
+                            disabled={loadingAction}
+                            className="neo-btn bg-brutal-yellow text-black w-full"
+                        >
+                            {loadingAction ? 'Sending...' : 'Resend Verification Email'}
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        disabled={loadingAction}
+                        className="neo-btn bg-white text-black w-full"
+                    >
+                        {loadingAction ? 'Please wait...' : 'Forgot Password'}
+                    </button>
+                </div>
 
                 <div className="my-8 border-b-4 border-black relative">
                     <span className="absolute bg-white px-4 font-black left-1/2 -translate-x-1/2 -top-3 text-sm">SOCIAL OVERRIDE</span>

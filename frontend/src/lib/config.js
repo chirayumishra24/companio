@@ -1,4 +1,5 @@
 export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const USE_BEARER = import.meta.env.VITE_USE_BEARER === "true";
 
 export function getToken() {
   const sessionToken = sessionStorage.getItem("token");
@@ -27,6 +28,7 @@ export function clearToken() {
 
 export function authHeaders() {
   const token = getToken();
+  if (!USE_BEARER) return {};
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

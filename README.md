@@ -27,6 +27,9 @@
 
 ### Security Notes
 - `JWT_SECRET` and `SESSION_SECRET` should be set in `.env`.
+- Auth now supports `httpOnly` cookie sessions with refresh-token rotation (`/auth/refresh`).
+- Existing bearer token flows still work for backward compatibility.
+- Frontend defaults to cookie auth (`VITE_USE_BEARER=false`). Set `VITE_USE_BEARER=true` only if you need explicit bearer headers.
 - Google OAuth is optional; if not configured, Google login routes return a clear error instead of crashing startup.
 - AI keys are optional:
   - `GROQ_API_KEY` (recommended for free tier)
@@ -43,6 +46,29 @@
 6. Copy values into `.env`:
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
+
+### Auth Flows Added
+- `POST /auth/refresh` to rotate refresh session and issue a new access cookie/token.
+- `POST /auth/logout` and `POST /auth/logout-all`.
+- `POST /auth/verify/request` and `GET /auth/verify-email?token=...`.
+- `POST /auth/password-reset/request` and `POST /auth/password-reset/confirm`.
+- Set `REQUIRE_EMAIL_VERIFICATION=true` in production once email delivery is connected.
+
+### SMTP Email Setup
+- Configure in `.env`:
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_USER`
+  - `SMTP_PASS`
+  - `SMTP_SECURE`
+  - `EMAIL_FROM`
+- If SMTP is missing, backend logs verification/reset URLs to console for local development.
+
+### Trust & Safety APIs Added
+- `POST /api/block`, `POST /api/unblock`, `GET /api/blocked`
+- `POST /api/unmatch`
+- `POST /api/report`
+- Matching and messaging now enforce block relationships and mutual-match constraints.
 
 ### Firebase Service Account Setup
 1. Go to Firebase Console -> your project -> Project settings -> Service accounts.

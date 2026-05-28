@@ -123,10 +123,10 @@ export default function Matches() {
                 {discoveredCount} profile{discoveredCount === 1 ? "" : "s"} left in your stack
               </p>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => navigate("/messages")} className="neo-btn bg-brutal-cyan">Inbox</button>
-              <button onClick={() => navigate("/itinerary-assistant")} className="neo-btn bg-brutal-green">AI Trip</button>
-              <button onClick={() => navigate("/profile-setup")} className="neo-btn bg-white">Edit Profile</button>
+            <div className="flex gap-3 flex-wrap">
+              <button onClick={() => navigate("/messages")} className="neo-btn bg-brutal-cyan shadow-[4px_4px_0px_0px_#A64AFF]">Inbox</button>
+              <button onClick={() => navigate("/itinerary-assistant")} className="neo-btn bg-brutal-green shadow-[4px_4px_0px_0px_#A64AFF]">AI Trip</button>
+              <button onClick={() => navigate("/profile-setup")} className="neo-btn bg-white shadow-[4px_4px_0px_0px_#000000]">Edit Profile</button>
             </div>
           </div>
         </header>
@@ -199,29 +199,29 @@ export default function Matches() {
                   ))}
                 </div>
 
-                <div className="mt-6 grid grid-cols-3 gap-2">
+                <div className="mt-6 grid grid-cols-3 gap-3">
                   <button
                     type="button"
                     disabled={acting}
                     onClick={() => takeAction("dislike")}
-                    className="neo-btn bg-white text-sm md:text-base"
+                    className="neo-btn bg-[#FF499E] text-white text-sm md:text-base border-4 border-black hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none"
                   >
-                    Pass
+                    PASS
                   </button>
                   <button
                     type="button"
                     disabled={acting}
                     onClick={() => takeAction("like")}
-                    className="neo-btn bg-brutal-green text-sm md:text-base"
+                    className="neo-btn bg-brutal-green text-black text-sm md:text-base border-4 border-black hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none"
                   >
-                    Like
+                    LIKE
                   </button>
                   <button
                     type="button"
                     onClick={() => openChat(current.email)}
-                    className="neo-btn bg-brutal-cyan text-sm md:text-base"
+                    className="neo-btn bg-brutal-cyan text-black text-sm md:text-base border-4 border-black hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none"
                   >
-                    Chat
+                    CHAT
                   </button>
                 </div>
               </article>

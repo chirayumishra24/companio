@@ -4,10 +4,11 @@
 
 @layer base {
   body {
-    @apply bg-brutal-bg text-black font-sans antialiased overflow-x-hidden selection:bg-brutal-pink selection:text-white;
+    @apply bg-brutal-bg text-black antialiased overflow-x-hidden selection:bg-brutal-pink selection:text-white;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
   }
 
-  /* Add a subtle dot pattern background to the brutal-bg class */
+  /* Animated dot-grid background */
   .layout-bg-pattern {
     background-image: radial-gradient(#000 1px, transparent 1px);
     background-size: 20px 20px;
@@ -16,14 +17,202 @@
 
 @layer utilities {
   .neo-btn {
-    @apply px-6 py-3 font-bold border-4 border-black shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all duration-150 rounded-none disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider;
+    @apply px-6 py-3 font-bold border-4 border-black shadow-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all duration-200 rounded-none disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider active:translate-y-2 active:shadow-none;
   }
 
   .neo-card {
-    @apply p-6 bg-white border-4 border-black shadow-brutal-lg rounded-none transition-transform hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#000000];
+    @apply p-6 bg-white border-4 border-black shadow-brutal-lg rounded-none transition-transform duration-300 hover:-translate-y-2 hover:shadow-[14px_14px_0px_0px_#000000];
   }
 
   .neo-input {
     @apply w-full px-4 py-3 border-4 border-black focus:outline-none focus:shadow-[4px_4px_0px_0px_#FF499E] focus:-translate-y-1 transition-all rounded-none bg-white font-bold;
   }
+}
+
+/* ========== PROFESSIONAL BACKGROUND & EFFECTS ========== */
+
+/* Subtle noise texture overlay — gives depth to flat surfaces */
+.noise-overlay::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* Animated moving grid */
+.animated-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: gridSlide 25s linear infinite;
+}
+
+@keyframes gridSlide {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 40px 40px;
+  }
+}
+
+/* Marquee ticker strip */
+.marquee-strip {
+  overflow: hidden;
+  white-space: nowrap;
+  border-top: 4px solid #000;
+  border-bottom: 4px solid #000;
+  background: #000;
+  color: #FFD000;
+  padding: 10px 0;
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.marquee-content {
+  display: inline-block;
+  animation: marqueeScroll 20s linear infinite;
+}
+
+@keyframes marqueeScroll {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* Floating accent shapes */
+@keyframes floatUp {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-18px) rotate(6deg);
+  }
+}
+
+@keyframes floatSide {
+
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateX(14px) rotate(-4deg);
+  }
+}
+
+@keyframes pulseShadow {
+
+  0%,
+  100% {
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1);
+  }
+
+  50% {
+    box-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 0.6);
+  }
+}
+
+.float-up {
+  animation: floatUp 5s ease-in-out infinite;
+}
+
+.float-side {
+  animation: floatSide 6s ease-in-out infinite;
+}
+
+.pulse-shadow {
+  animation: pulseShadow 3s ease-in-out infinite;
+}
+
+/* Diagonal stripe accent */
+.diagonal-stripes {
+  background: repeating-linear-gradient(-45deg,
+      transparent,
+      transparent 8px,
+      rgba(0, 0, 0, 0.03) 8px,
+      rgba(0, 0, 0, 0.03) 16px);
+}
+
+/* Gradient border glow for special cards */
+.glow-card {
+  position: relative;
+}
+
+.glow-card::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  background: linear-gradient(135deg, #FF499E, #00E5FF, #FFD000, #00FF66);
+  background-size: 300% 300%;
+  animation: gradientShift 4s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Stagger entrance animations */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-enter {
+  animation: fadeSlideUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.anim-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.anim-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.anim-delay-3 {
+  animation-delay: 0.3s;
+}
+
+.anim-delay-4 {
+  animation-delay: 0.4s;
 }

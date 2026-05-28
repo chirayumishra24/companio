@@ -22,11 +22,14 @@ import User from './models/User.js';
 import Review from "./models/Review.js";
 import Message from "./models/message.js";
 import Profile from "./models/profile.js";
+import SafetyReport from "./models/SafetyReport.js";
 import { isFirebaseConfigured } from "./lib/firebaseAdmin.js";
 import { sortDocs } from "./lib/firestoreModel.js";
+import { isMailerConfigured, sendEmail } from "./lib/mailer.js";
 dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const BACKEND_PUBLIC_URL = process.env.BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString("hex");
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString("hex");
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -34,11 +37,27 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const ACCESS_TOKEN_MINUTES = Number(process.env.ACCESS_TOKEN_MINUTES || 120);
+const REFRESH_TOKEN_DAYS = Number(process.env.REFRESH_TOKEN_DAYS || 30);
+const ACCESS_COOKIE_NAME = process.env.ACCESS_COOKIE_NAME || "companio_at";
+const REFRESH_COOKIE_NAME = process.env.REFRESH_COOKIE_NAME || "companio_rt";
+const COOKIE_SAME_SITE = process.env.COOKIE_SAME_SITE || "lax";
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production";
+const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
+const CORS_ORIGINS = Array.from(
+  new Set(
+    [FRONTEND_URL, ...(process.env.CORS_ORIGINS || "").split(",")]
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  )
+);
 if (!process.env.JWT_SECRET) console.warn("⚠️ JWT_SECRET missing. Using runtime-generated secret.");
 if (!process.env.SESSION_SECRET) console.warn("⚠️ SESSION_SECRET missing. Using runtime-generated secret.");
 if (!isFirebaseConfigured) {
-  console.error("❌ Firebase is not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_* service-account vars.");
-  process.exit(1);
+  console.warn("⚠️ Firebase is not configured. Features like matching or profile creation will fail.");
+}
+if (!isMailerConfigured) {
+  console.warn("⚠️ SMTP not configured. Verification/reset links will be logged only.");
 }
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -102,6 +121,117 @@ function sanitizeNextPath(value) {
 function appendToken(pathname, token) {
   const separator = pathname.includes("?") ? "&" : "?";
   return `${pathname}${separator}token=${encodeURIComponent(token)}`;
+}
+
+function parseCookies(req) {
+  const raw = req.headers?.cookie || "";
+  const out = {};
+  raw.split(";").forEach((segment) => {
+    const [name, ...value] = segment.trim().split("=");
+    if (!name) return;
+    out[name] = decodeURIComponent(value.join("=") || "");
+  });
+  return out;
+}
+
+function hashToken(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function sanitizeIp(req) {
+  const raw = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim();
+  return raw.slice(0, 120);
+}
+
+function baseCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: COOKIE_SECURE,
+    sameSite: COOKIE_SAME_SITE,
+    path: "/",
+  };
+}
+
+function setAuthCookies(res, accessToken, refreshToken) {
+  res.cookie(ACCESS_COOKIE_NAME, accessToken, {
+    ...baseCookieOptions(),
+    maxAge: ACCESS_TOKEN_MINUTES * 60 * 1000,
+  });
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+    ...baseCookieOptions(),
+    maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearAuthCookies(res) {
+  res.clearCookie(ACCESS_COOKIE_NAME, baseCookieOptions());
+  res.clearCookie(REFRESH_COOKIE_NAME, baseCookieOptions());
+}
+
+function pruneRefreshSessions(user) {
+  const now = Date.now();
+  const sessions = Array.isArray(user.refreshSessions) ? user.refreshSessions : [];
+  user.refreshSessions = sessions
+    .filter((session) => session && session.id && session.tokenHash)
+    .filter((session) => {
+      const expiresAt = new Date(session.expiresAt || 0).getTime();
+      return Number.isFinite(expiresAt) && expiresAt > now;
+    })
+    .slice(-10);
+}
+
+function signAccessToken(user, sessionId) {
+  return jwt.sign(
+    { userId: user._id, email: user.email, sessionId, type: "access" },
+    JWT_SECRET,
+    { expiresIn: `${ACCESS_TOKEN_MINUTES}m` }
+  );
+}
+
+function signRefreshToken(user, sessionId) {
+  return jwt.sign(
+    { userId: user._id, email: user.email, sessionId, type: "refresh" },
+    JWT_SECRET,
+    { expiresIn: `${REFRESH_TOKEN_DAYS}d` }
+  );
+}
+
+async function createAuthSession(user, req, res) {
+  pruneRefreshSessions(user);
+
+  const sessionId = crypto.randomUUID();
+  const refreshToken = signRefreshToken(user, sessionId);
+  const accessToken = signAccessToken(user, sessionId);
+  const now = new Date();
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
+  const userAgent = sanitizeText(String(req.headers["user-agent"] || "")).slice(0, 300);
+  const ip = sanitizeIp(req);
+
+  user.refreshSessions.push({
+    id: sessionId,
+    tokenHash: hashToken(refreshToken),
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    userAgent,
+    ip,
+    lastSeenAt: now.toISOString(),
+  });
+  user.lastLoginAt = now.toISOString();
+  user.lastActiveAt = now.toISOString();
+  await user.save();
+
+  setAuthCookies(res, accessToken, refreshToken);
+  return { accessToken, refreshToken, sessionId };
+}
+
+function isAdult(dobValue) {
+  const dob = new Date(dobValue);
+  if (Number.isNaN(dob.getTime())) return false;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age -= 1;
+  return age >= 18;
 }
 
 function isSelfRequest(req, userId) {
@@ -258,9 +388,9 @@ async function callOpenAIItinerary({ destination, days, interests, budget, trave
   const data = await resp.json();
   const textFromOutputArray = Array.isArray(data.output)
     ? data.output
-        .flatMap((item) => Array.isArray(item.content) ? item.content : [])
-        .map((part) => part.text || "")
-        .join("\n")
+      .flatMap((item) => Array.isArray(item.content) ? item.content : [])
+      .map((part) => part.text || "")
+      .join("\n")
     : "";
   const rawText = data.output_text || textFromOutputArray;
   const parsed = extractJsonObject(rawText);
@@ -396,13 +526,44 @@ function serveFrontendEntry(req, res) {
 }
 
 async function areUsersMatched(emailA, emailB) {
-  const first = await User.findOne({ email: emailA });
-  if (!first) return false;
-  return Array.isArray(first.matches) && first.matches.includes(emailB);
+  const [first, second] = await Promise.all([
+    User.findOne({ email: emailA }),
+    User.findOne({ email: emailB }),
+  ]);
+  if (!first || !second) return false;
+
+  const firstBlocked = Array.isArray(first.blockedUsers) && first.blockedUsers.includes(emailB);
+  const secondBlocked = Array.isArray(second.blockedUsers) && second.blockedUsers.includes(emailA);
+  if (firstBlocked || secondBlocked) return false;
+
+  const firstMatches = Array.isArray(first.matches) && first.matches.includes(emailB);
+  const secondMatches = Array.isArray(second.matches) && second.matches.includes(emailA);
+  return firstMatches && secondMatches;
+}
+
+async function areUsersBlocked(emailA, emailB) {
+  const [first, second] = await Promise.all([
+    User.findOne({ email: emailA }),
+    User.findOne({ email: emailB }),
+  ]);
+  if (!first || !second) return false;
+  const firstBlocked = Array.isArray(first.blockedUsers) && first.blockedUsers.includes(emailB);
+  const secondBlocked = Array.isArray(second.blockedUsers) && second.blockedUsers.includes(emailA);
+  return firstBlocked || secondBlocked;
 }
 
 // Middleware
-app.use(cors());
+app.set("trust proxy", 1);
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      if (CORS_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use("/static", express.static(path.join(__dirname, "static")));
@@ -454,9 +615,6 @@ app.get("/auth/google", (req, res, next) => {
     state: nextPath,
   })(req, res, next);
 });
-app.get("/auth/logout", (req, res) => {
-  req.logout(() => res.redirect(`${FRONTEND_URL}/login`));
-});
 app.get("/auth/google/callback",
   (req, res, next) => {
     if (!isGoogleOAuthConfigured) {
@@ -470,25 +628,24 @@ app.get("/auth/google/callback",
   }),
   async (req, res) => {
     const nextPath = sanitizeNextPath(String(req.query.state || "/matches"));
-    const token = jwt.sign(
-      { userId: req.user._id, email: req.user.email },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    req.user.emailVerified = true;
+    req.user.emailVerificationTokenHash = "";
+    req.user.emailVerificationExpiresAt = null;
+    const { accessToken } = await createAuthSession(req.user, req, res);
 
     const profile = await Profile.findOne({ email: req.user.email });
 
     if (!req.user.passwordHash) {
-      const setPasswordPath = appendToken(`/set-password?next=${encodeURIComponent(nextPath)}`, token);
+      const setPasswordPath = appendToken(`/set-password?next=${encodeURIComponent(nextPath)}`, accessToken);
       return res.redirect(`${FRONTEND_URL}${setPasswordPath}`);
     }
 
     if (!profile) {
-      const setupPath = appendToken(`/profile-setup?next=${encodeURIComponent(nextPath)}`, token);
+      const setupPath = appendToken(`/profile-setup?next=${encodeURIComponent(nextPath)}`, accessToken);
       return res.redirect(`${FRONTEND_URL}${setupPath}`);
     }
 
-    res.redirect(`${FRONTEND_URL}${appendToken(nextPath, token)}`);
+    res.redirect(`${FRONTEND_URL}${appendToken(nextPath, accessToken)}`);
   }
 );
 
@@ -497,28 +654,272 @@ app.get('/login-success', (req, res) => {
   if (token) return res.redirect(`${FRONTEND_URL}/login?token=${token}`);
   return res.redirect(`${FRONTEND_URL}/login?error=missing_token`);
 });
-// JWT Middleware (updated with better logging)
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
 
-  if (!authHeader) {
-    return res.status(401).json({ message: "Missing authorization header" });
-  }
-
-  const token = authHeader.split(' ')[1]; // expecting "Bearer <token>"
-
-  if (!token) {
-    return res.status(401).json({ message: "Token missing after Bearer" });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: "Invalid or expired token" });
+app.post("/auth/refresh", async (req, res) => {
+  try {
+    const cookies = parseCookies(req);
+    const refreshToken = cookies[REFRESH_COOKIE_NAME] || String(req.body?.refreshToken || "");
+    if (!refreshToken) {
+      clearAuthCookies(res);
+      return res.status(401).json({ message: "Missing refresh token" });
     }
 
-    req.user = user;
-    next();
-  });
+    const payload = jwt.verify(refreshToken, JWT_SECRET);
+    if (payload?.type !== "refresh" || !payload?.email || !payload?.sessionId) {
+      clearAuthCookies(res);
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    const user = await User.findOne({ email: payload.email });
+    if (!user) {
+      clearAuthCookies(res);
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    pruneRefreshSessions(user);
+    const existing = user.refreshSessions.find((session) => session.id === payload.sessionId);
+    if (!existing || existing.tokenHash !== hashToken(refreshToken)) {
+      user.refreshSessions = user.refreshSessions.filter((session) => session.id !== payload.sessionId);
+      await user.save();
+      clearAuthCookies(res);
+      return res.status(401).json({ message: "Refresh token rotated or revoked" });
+    }
+
+    user.refreshSessions = user.refreshSessions.filter((session) => session.id !== payload.sessionId);
+    const { accessToken } = await createAuthSession(user, req, res);
+    return res.status(200).json({ token: accessToken, userId: user._id, email: user.email });
+  } catch (err) {
+    clearAuthCookies(res);
+    return res.status(401).json({ message: "Invalid or expired refresh token" });
+  }
+});
+
+app.post("/auth/logout", async (req, res) => {
+  try {
+    const cookies = parseCookies(req);
+    const refreshToken = cookies[REFRESH_COOKIE_NAME] || "";
+    if (refreshToken) {
+      try {
+        const payload = jwt.verify(refreshToken, JWT_SECRET);
+        if (payload?.email && payload?.sessionId) {
+          const user = await User.findOne({ email: payload.email });
+          if (user) {
+            user.refreshSessions = (user.refreshSessions || []).filter((session) => session.id !== payload.sessionId);
+            await user.save();
+          }
+        }
+      } catch {
+        // ignore invalid refresh tokens during logout
+      }
+    }
+    clearAuthCookies(res);
+    return res.status(200).json({ message: "Logged out" });
+  } catch {
+    clearAuthCookies(res);
+    return res.status(200).json({ message: "Logged out" });
+  }
+});
+
+app.get("/auth/session", async (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const headerToken = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : "";
+  const cookies = parseCookies(req);
+  const accessToken = headerToken || cookies[ACCESS_COOKIE_NAME] || "";
+  if (!accessToken) {
+    return res.status(401).json({ authenticated: false });
+  }
+  try {
+    const payload = jwt.verify(accessToken, JWT_SECRET);
+    return res.status(200).json({
+      authenticated: true,
+      userId: payload.userId,
+      email: payload.email,
+      sessionId: payload.sessionId || "",
+    });
+  } catch {
+    return res.status(401).json({ authenticated: false });
+  }
+});
+
+app.post("/auth/verify/request", async (req, res) => {
+  try {
+    const email = sanitizeText(req.body?.email).toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(200).json({ message: "If the account exists, verification was sent." });
+    if (user.emailVerified) return res.status(200).json({ message: "Email already verified." });
+
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+    user.emailVerificationTokenHash = hashToken(verifyToken);
+    user.emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    user.verificationRequestedAt = new Date().toISOString();
+    await user.save();
+
+    const verifyUrl = `${BACKEND_PUBLIC_URL}/auth/verify-email?token=${encodeURIComponent(verifyToken)}`;
+    console.log("📧 Email verification link:", verifyUrl);
+    await sendEmail({
+      to: email,
+      subject: "Verify your Companio email",
+      text: `Verify your email by opening this link: ${verifyUrl}`,
+      html: `<p>Verify your Companio email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+    });
+
+    return res.status(200).json({
+      message: "Verification link generated.",
+      ...(process.env.NODE_ENV !== "production" ? { verifyToken, verifyUrl } : {}),
+    });
+  } catch (err) {
+    console.error("Verify request error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.get("/auth/verify-email", async (req, res) => {
+  try {
+    const token = String(req.query.token || "");
+    if (!token) return res.redirect(`${FRONTEND_URL}/login?verified=0`);
+    const tokenHash = hashToken(token);
+    const user = await User.findOne({ emailVerificationTokenHash: tokenHash });
+    if (!user) return res.redirect(`${FRONTEND_URL}/login?verified=0`);
+
+    const expiresAt = new Date(user.emailVerificationExpiresAt || 0).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+      return res.redirect(`${FRONTEND_URL}/login?verified=0`);
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationTokenHash = "";
+    user.emailVerificationExpiresAt = null;
+    await user.save();
+    return res.redirect(`${FRONTEND_URL}/login?verified=1`);
+  } catch (err) {
+    console.error("Verify email error:", err);
+    return res.redirect(`${FRONTEND_URL}/login?verified=0`);
+  }
+});
+
+app.post("/auth/password-reset/request", async (req, res) => {
+  try {
+    const email = sanitizeText(req.body?.email).toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(200).json({ message: "If the account exists, reset link was generated." });
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    user.passwordResetTokenHash = hashToken(resetToken);
+    user.passwordResetExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    await user.save();
+
+    const resetUrl = `${FRONTEND_URL}/login?resetToken=${encodeURIComponent(resetToken)}`;
+    console.log("🔐 Password reset link:", resetUrl);
+    await sendEmail({
+      to: email,
+      subject: "Companio password reset",
+      text: `Reset your password using this link: ${resetUrl}`,
+      html: `<p>Reset your Companio password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
+    });
+
+    return res.status(200).json({
+      message: "Password reset link generated.",
+      ...(process.env.NODE_ENV !== "production" ? { resetToken, resetUrl } : {}),
+    });
+  } catch (err) {
+    console.error("Password reset request error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.post("/auth/password-reset/confirm", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "");
+    const password = String(req.body?.password || "");
+    if (!token || password.length < 8) {
+      return res.status(400).json({ message: "Token and valid password are required." });
+    }
+
+    const tokenHash = hashToken(token);
+    const user = await User.findOne({ passwordResetTokenHash: tokenHash });
+    if (!user) return res.status(400).json({ message: "Invalid reset token." });
+
+    const expiresAt = new Date(user.passwordResetExpiresAt || 0).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+      return res.status(400).json({ message: "Reset token expired." });
+    }
+
+    user.passwordHash = await bcrypt.hash(password, 10);
+    user.passwordResetTokenHash = "";
+    user.passwordResetExpiresAt = null;
+    user.refreshSessions = [];
+    await user.save();
+    clearAuthCookies(res);
+    return res.status(200).json({ message: "Password updated. Please login again." });
+  } catch (err) {
+    console.error("Password reset confirm error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+// JWT middleware with cookie + bearer support and refresh rotation.
+async function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  const headerToken = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : "";
+  const cookies = parseCookies(req);
+  const accessToken = headerToken || cookies[ACCESS_COOKIE_NAME] || "";
+  const refreshToken = cookies[REFRESH_COOKIE_NAME] || "";
+
+  if (!accessToken && !refreshToken) {
+    return res.status(401).json({ message: "Missing authorization token" });
+  }
+
+  if (accessToken) {
+    try {
+      const payload = jwt.verify(accessToken, JWT_SECRET);
+      if (payload.type && payload.type !== "access") {
+        return res.status(403).json({ message: "Invalid token type" });
+      }
+      req.user = payload;
+      return next();
+    } catch {
+      // fall through to refresh flow
+    }
+  }
+
+  if (!refreshToken) {
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
+
+  try {
+    const refreshPayload = jwt.verify(refreshToken, JWT_SECRET);
+    if (refreshPayload.type !== "refresh" || !refreshPayload.email || !refreshPayload.sessionId) {
+      clearAuthCookies(res);
+      return res.status(403).json({ message: "Invalid refresh session" });
+    }
+
+    const user = await User.findOne({ email: refreshPayload.email });
+    if (!user) {
+      clearAuthCookies(res);
+      return res.status(403).json({ message: "Session user not found" });
+    }
+
+    pruneRefreshSessions(user);
+    const existing = user.refreshSessions.find((session) => session.id === refreshPayload.sessionId);
+    if (!existing || existing.tokenHash !== hashToken(refreshToken)) {
+      user.refreshSessions = user.refreshSessions.filter((session) => session.id !== refreshPayload.sessionId);
+      await user.save();
+      clearAuthCookies(res);
+      return res.status(403).json({ message: "Refresh session revoked" });
+    }
+
+    user.refreshSessions = user.refreshSessions.filter((session) => session.id !== refreshPayload.sessionId);
+    const { accessToken: rotatedAccess } = await createAuthSession(user, req, res);
+    const rotatedPayload = jwt.verify(rotatedAccess, JWT_SECRET);
+    req.user = rotatedPayload;
+    return next();
+  } catch {
+    clearAuthCookies(res);
+    return res.status(403).json({ message: "Invalid or expired token" });
+  }
 }
 
 const authLimiter = rateLimit({
@@ -527,6 +928,34 @@ const authLimiter = rateLimit({
   message: "Too many requests. Try again later.",
 });
 app.use("/auth", authLimiter);
+
+const messagingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 50,
+  message: "Too many messages. Slow down.",
+});
+
+const moderationLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: "Too many moderation actions. Try later.",
+});
+
+app.post("/auth/logout-all", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.user.email });
+    if (user) {
+      user.refreshSessions = [];
+      await user.save();
+    }
+    clearAuthCookies(res);
+    return res.status(200).json({ message: "Logged out from all devices." });
+  } catch (err) {
+    console.error("Logout-all error:", err);
+    clearAuthCookies(res);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
 
 // ✅ Auth: Signup
 app.post('/auth/signup', async (req, res) => {
@@ -548,11 +977,43 @@ app.post('/auth/signup', async (req, res) => {
       return res.status(400).json({ message: 'Email already linked with Google account. Please use Google login.' });
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = existing ? Object.assign(existing, { passwordHash }) : new User({ email, passwordHash });
+    const newUser = existing
+      ? Object.assign(existing, { passwordHash })
+      : new User({
+        email,
+        passwordHash,
+        emailVerified: false,
+        likes: [],
+        dislikes: [],
+        matches: [],
+        blockedUsers: [],
+        reportedUsers: [],
+        refreshSessions: [],
+      });
+
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+    newUser.emailVerificationTokenHash = hashToken(verifyToken);
+    newUser.emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    newUser.verificationRequestedAt = new Date().toISOString();
     await newUser.save();
-    // 🔐 Issue token immediately after signup
-    const token = jwt.sign({ userId: newUser._id, email: newUser.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ token, userId: newUser._id, email: newUser.email });
+    const verifyUrl = `${BACKEND_PUBLIC_URL}/auth/verify-email?token=${encodeURIComponent(verifyToken)}`;
+    console.log("📧 Signup verification link:", verifyUrl);
+    await sendEmail({
+      to: email,
+      subject: "Welcome to Companio - verify your email",
+      text: `Welcome to Companio. Verify your email: ${verifyUrl}`,
+      html: `<p>Welcome to Companio.</p><p>Verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+    });
+
+    const { accessToken } = await createAuthSession(newUser, req, res);
+    res.status(201).json({
+      token: accessToken,
+      userId: newUser._id,
+      email: newUser.email,
+      profileSetupComplete: false,
+      verificationRequired: REQUIRE_EMAIL_VERIFICATION && !newUser.emailVerified,
+      ...(process.env.NODE_ENV !== "production" ? { verifyToken, verifyUrl } : {}),
+    });
   } catch (err) {
     console.error("Signup error:", err);
     res.status(500).json({ message: "Server error" });
@@ -584,19 +1045,26 @@ app.post('/auth/login', async (req, res) => {
       });
     }
 
+    if (REQUIRE_EMAIL_VERIFICATION && !user.emailVerified) {
+      return res.status(403).json({
+        message: "Email not verified yet. Please verify before login.",
+        needsVerification: true,
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials." });
     }
 
-    const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    const { accessToken } = await createAuthSession(user, req, res);
 
     // ✅ NEW: Check if profile exists
     const profile = await Profile.findOne({ email });
     const needsProfileSetup = !profile;
 
     res.json({
-      token,
+      token: accessToken,
       userId: user._id,
       email: user.email,
       profileSetupComplete: !needsProfileSetup  // 👈 include this
@@ -621,6 +1089,11 @@ app.post("/auth/set-password", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Password is already set. Use a dedicated change-password flow." });
     }
     user.passwordHash = await bcrypt.hash(password, 10);
+    if (!user.emailVerified) {
+      user.emailVerified = true;
+      user.emailVerificationTokenHash = "";
+      user.emailVerificationExpiresAt = null;
+    }
     await user.save();
     res.status(200).json({ message: "Password set successfully" });
   } catch (err) {
@@ -678,6 +1151,9 @@ app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), 
 
     // Format DOB safely
     const dob = `${dob_year.padStart(4, '0')}-${dob_month.padStart(2, '0')}-${dob_day.padStart(2, '0')}`;
+    if (!isAdult(dob)) {
+      return res.status(400).json({ message: "You must be at least 18 years old to use this app." });
+    }
 
     // Handle photo uploads
     const photos = req.files?.map(file => file.filename) || [];
@@ -823,10 +1299,12 @@ app.get('/api/itineraries', authenticateToken, async (req, res) => {
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
     const dislikedEmails = user?.dislikes || [];
+    const blockedEmails = user?.blockedUsers || [];
 
     const query = {
       user: { $ne: profile._id },
-      ...(destination && { destination: { $regex: destination, $options: "i" } })
+      ...(destination && { destination: { $regex: destination, $options: "i" } }),
+      ...(budget && { budget: { $regex: budget, $options: "i" } }),
     };
 
     const itineraries = sortDocs(await Itinerary.find(query), { createdAt: -1 }).slice(0, 20);
@@ -841,7 +1319,18 @@ app.get('/api/itineraries', authenticateToken, async (req, res) => {
       })
     );
 
-    const filtered = withUsers.filter((itinerary) => itinerary.user && !dislikedEmails.includes(itinerary.user.email));
+    const ownerEmails = withUsers.map((itinerary) => itinerary.user?.email).filter(Boolean);
+    const owners = await User.find({ email: { $in: ownerEmails } });
+    const ownerMap = new Map(owners.map((owner) => [owner.email, owner]));
+    const filtered = withUsers.filter((itinerary) => {
+      if (!itinerary.user) return false;
+      const ownerEmail = itinerary.user.email;
+      if (dislikedEmails.includes(ownerEmail)) return false;
+      if (blockedEmails.includes(ownerEmail)) return false;
+      const ownerUser = ownerMap.get(ownerEmail);
+      if (ownerUser && (ownerUser.blockedUsers || []).includes(req.user.email)) return false;
+      return true;
+    });
     res.json(filtered);
   } catch (err) {
     console.error("Error fetching itineraries:", err);
@@ -989,13 +1478,17 @@ app.get("/api/matches", authenticateToken, async (req, res) => {
 
     const alreadyLiked = currentUser.likes || [];
     const alreadyDisliked = currentUser.dislikes || [];
-
-    const profiles = await Profile.find({
+    const blockedUsers = currentUser.blockedUsers || [];
+    const candidateUsers = await User.find({
       email: {
         $ne: userEmail,
-        $nin: [...alreadyLiked, ...alreadyDisliked]
-      }
+        $nin: [...alreadyLiked, ...alreadyDisliked, ...blockedUsers],
+      },
     });
+    const candidateEmails = candidateUsers
+      .filter((candidate) => !(candidate.blockedUsers || []).includes(userEmail))
+      .map((candidate) => candidate.email);
+    const profiles = await Profile.find({ email: { $in: candidateEmails } });
 
     console.log("🧠 Profiles found:", profiles.length);
 
@@ -1029,11 +1522,16 @@ app.get("/api/matches", authenticateToken, async (req, res) => {
 app.get("/api/mutual-matches", authenticateToken, async (req, res) => {
   try {
     const loggedInUser = await User.findOne({ email: req.user.email });
+    if (!loggedInUser) return res.status(404).json({ message: "User not found" });
+    const blocked = loggedInUser.blockedUsers || [];
 
-    const mutuals = await User.find({
+    const mutualCandidates = await User.find({
       email: { $in: loggedInUser.matches },
       matches: req.user.email
     });
+    const mutuals = mutualCandidates.filter(
+      (candidate) => !blocked.includes(candidate.email) && !(candidate.blockedUsers || []).includes(req.user.email)
+    );
 
     const emails = mutuals.map(u => u.email);
     const profiles = await Profile.find({ email: { $in: emails } });
@@ -1073,12 +1571,16 @@ app.get("/api/mutual-matches", authenticateToken, async (req, res) => {
 app.post("/api/like", authenticateToken, async (req, res) => {
   try {
     const userEmail = req.user.email;
-    const { targetEmail } = req.body;
+    const targetEmail = sanitizeText(req.body?.targetEmail).toLowerCase();
     if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
+    if (targetEmail === userEmail) return res.status(400).json({ message: "Cannot like yourself" });
 
     const me = await User.findOne({ email: userEmail });
     const target = await User.findOne({ email: targetEmail });
     if (!target) return res.status(404).json({ message: "Target user not found" });
+    if ((me.blockedUsers || []).includes(targetEmail) || (target.blockedUsers || []).includes(userEmail)) {
+      return res.status(403).json({ message: "Cannot interact with this user" });
+    }
 
     /* add the like (no duplicates) */
     if (!me.likes.includes(targetEmail)) {
@@ -1109,10 +1611,14 @@ app.post("/api/like", authenticateToken, async (req, res) => {
 app.post("/api/dislike", authenticateToken, async (req, res) => {
   try {
     const userEmail = req.user.email;
-    const { targetEmail } = req.body;
+    const targetEmail = sanitizeText(req.body?.targetEmail).toLowerCase();
     if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
+    if (targetEmail === userEmail) return res.status(400).json({ message: "Cannot dislike yourself" });
 
     const me = await User.findOne({ email: userEmail });
+    if ((me.blockedUsers || []).includes(targetEmail)) {
+      return res.status(403).json({ message: "Cannot interact with this user" });
+    }
 
     if (!me.dislikes.includes(targetEmail)) {
       me.dislikes.push(targetEmail);
@@ -1127,6 +1633,127 @@ app.post("/api/dislike", authenticateToken, async (req, res) => {
   }
 });
 
+app.post("/api/block", authenticateToken, moderationLimiter, async (req, res) => {
+  try {
+    const meEmail = req.user.email;
+    const targetEmail = sanitizeText(req.body?.targetEmail).toLowerCase();
+    if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
+    if (targetEmail === meEmail) return res.status(400).json({ message: "Cannot block yourself" });
+
+    const [me, target] = await Promise.all([
+      User.findOne({ email: meEmail }),
+      User.findOne({ email: targetEmail }),
+    ]);
+    if (!me || !target) return res.status(404).json({ message: "User not found" });
+
+    if (!me.blockedUsers.includes(targetEmail)) me.blockedUsers.push(targetEmail);
+    me.matches = (me.matches || []).filter((email) => email !== targetEmail);
+    me.likes = (me.likes || []).filter((email) => email !== targetEmail);
+    me.dislikes = (me.dislikes || []).filter((email) => email !== targetEmail);
+
+    target.matches = (target.matches || []).filter((email) => email !== meEmail);
+    target.likes = (target.likes || []).filter((email) => email !== meEmail);
+    target.dislikes = (target.dislikes || []).filter((email) => email !== meEmail);
+
+    await Promise.all([me.save(), target.save()]);
+    return res.status(200).json({ message: "User blocked" });
+  } catch (err) {
+    console.error("Block route error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.post("/api/unblock", authenticateToken, moderationLimiter, async (req, res) => {
+  try {
+    const meEmail = req.user.email;
+    const targetEmail = sanitizeText(req.body?.targetEmail).toLowerCase();
+    if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
+
+    const me = await User.findOne({ email: meEmail });
+    if (!me) return res.status(404).json({ message: "User not found" });
+    me.blockedUsers = (me.blockedUsers || []).filter((email) => email !== targetEmail);
+    await me.save();
+    return res.status(200).json({ message: "User unblocked" });
+  } catch (err) {
+    console.error("Unblock route error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.get("/api/blocked", authenticateToken, async (req, res) => {
+  try {
+    const me = await User.findOne({ email: req.user.email });
+    if (!me) return res.status(404).json({ message: "User not found" });
+    return res.status(200).json({ blockedUsers: me.blockedUsers || [] });
+  } catch (err) {
+    console.error("Get blocked error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.post("/api/unmatch", authenticateToken, moderationLimiter, async (req, res) => {
+  try {
+    const meEmail = req.user.email;
+    const targetEmail = sanitizeText(req.body?.targetEmail).toLowerCase();
+    if (!targetEmail) return res.status(400).json({ message: "Missing targetEmail" });
+    if (targetEmail === meEmail) return res.status(400).json({ message: "Cannot unmatch yourself" });
+
+    const [me, target] = await Promise.all([
+      User.findOne({ email: meEmail }),
+      User.findOne({ email: targetEmail }),
+    ]);
+    if (!me || !target) return res.status(404).json({ message: "User not found" });
+
+    me.matches = (me.matches || []).filter((email) => email !== targetEmail);
+    target.matches = (target.matches || []).filter((email) => email !== meEmail);
+    await Promise.all([me.save(), target.save()]);
+
+    return res.status(200).json({ message: "Unmatched successfully" });
+  } catch (err) {
+    console.error("Unmatch route error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.post("/api/report", authenticateToken, moderationLimiter, async (req, res) => {
+  try {
+    const meEmail = req.user.email;
+    const targetEmail = sanitizeText(req.body?.targetEmail).toLowerCase();
+    const reason = sanitizeText(req.body?.reason);
+    const details = sanitizeText(req.body?.details);
+    const autoBlock = req.body?.autoBlock !== false;
+
+    if (!targetEmail || !reason) return res.status(400).json({ message: "targetEmail and reason are required" });
+    if (targetEmail === meEmail) return res.status(400).json({ message: "Cannot report yourself" });
+
+    const [me, target] = await Promise.all([
+      User.findOne({ email: meEmail }),
+      User.findOne({ email: targetEmail }),
+    ]);
+    if (!me || !target) return res.status(404).json({ message: "User not found" });
+
+    const report = new SafetyReport({
+      reporterEmail: meEmail,
+      targetEmail,
+      reason,
+      details,
+      status: "open",
+    });
+    await report.save();
+
+    if (!me.reportedUsers.includes(targetEmail)) me.reportedUsers.push(targetEmail);
+    if (autoBlock && !me.blockedUsers.includes(targetEmail)) me.blockedUsers.push(targetEmail);
+    me.matches = (me.matches || []).filter((email) => email !== targetEmail);
+    target.matches = (target.matches || []).filter((email) => email !== meEmail);
+    await Promise.all([me.save(), target.save()]);
+
+    return res.status(201).json({ message: "Report submitted", reportId: report._id });
+  } catch (err) {
+    console.error("Report route error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 // ✅ Also remove the itinerary of this user
 
@@ -1137,9 +1764,15 @@ app.get('/api/my-matches', authenticateToken, async (req, res) => {
     if (!currentUser || !currentUser.matches.length) {
       return res.json([]);
     }
+    const blocked = currentUser.blockedUsers || [];
+    const filteredEmails = currentUser.matches.filter((email) => !blocked.includes(email));
+    const matchUsers = await User.find({ email: { $in: filteredEmails } });
+    const visibleEmails = matchUsers
+      .filter((user) => !(user.blockedUsers || []).includes(req.user.email))
+      .map((user) => user.email);
     // Get profile info of matched users
     const matchedProfiles = await Profile.find({
-      email: { $in: currentUser.matches },
+      email: { $in: visibleEmails },
     });
     res.json(matchedProfiles);
   } catch (err) {
@@ -1150,7 +1783,7 @@ app.get('/api/my-matches', authenticateToken, async (req, res) => {
 /* ----------------  GET conversation history  ---------------- */
 app.get("/api/messages", authenticateToken, async (req, res) => {
   const me = req.user.email;
-  const user2 = sanitizeText(req.query.user2);
+  const user2 = sanitizeText(req.query.user2).toLowerCase();
   if (!user2) return res.status(400).json({ message: "Missing user2" });
   if (user2 === me) return res.status(400).json({ message: "Cannot query conversation with self" });
 
@@ -1172,16 +1805,20 @@ app.get("/api/messages", authenticateToken, async (req, res) => {
 });
 
 /* ----------------  POST new message (REST)  ---------------- */
-app.post("/api/messages/send", authenticateToken, async (req, res) => {
-  const receiver = sanitizeText(req.body?.receiver);
+app.post("/api/messages/send", authenticateToken, messagingLimiter, async (req, res) => {
+  const receiver = sanitizeText(req.body?.receiver).toLowerCase();
   const content = sanitizeText(req.body?.content);
   const sender = req.user.email;
   if (!receiver || !content) return res.status(400).json({ message: "receiver & content required" });
   if (sender === receiver) return res.status(400).json({ message: "Cannot message yourself" });
 
-  /* confirm they are matched */
-  const me = await User.findOne({ email: sender });
-  if (!me || !Array.isArray(me.matches) || !me.matches.includes(receiver)) {
+  const blocked = await areUsersBlocked(sender, receiver);
+  if (blocked) {
+    return res.status(403).json({ message: "Messaging disabled for this user pair" });
+  }
+
+  const matched = await areUsersMatched(sender, receiver);
+  if (!matched) {
     return res.status(403).json({ message: "Only matched users can chat" });
   }
 
@@ -1199,13 +1836,20 @@ app.post("/api/messages/send", authenticateToken, async (req, res) => {
 app.get("/api/messages/conversations", authenticateToken, async (req, res) => {
   const me = req.user.email;
   try {
+    const meUser = await User.findOne({ email: me });
+    const blocked = new Set(meUser?.blockedUsers || []);
     const msgs = await Message.find({ $or: [{ sender: me }, { receiver: me }] });
     const other = new Set();
     msgs.forEach(m => {
-      if (m.sender !== me) other.add(m.sender);
-      if (m.receiver !== me) other.add(m.receiver);
+      if (m.sender !== me && !blocked.has(m.sender)) other.add(m.sender);
+      if (m.receiver !== me && !blocked.has(m.receiver)) other.add(m.receiver);
     });
-    res.json({ users: [...other] });
+    const users = [...other];
+    const allOtherUsers = await User.find({ email: { $in: users } });
+    const filtered = allOtherUsers
+      .filter((user) => !(user.blockedUsers || []).includes(me))
+      .map((user) => user.email);
+    res.json({ users: filtered });
   } catch (e) {
     console.error("Conversation list error:", e);
     res.status(500).json({ message: "Server error" });
@@ -1216,16 +1860,18 @@ app.get("/api/messages/conversations", authenticateToken, async (req, res) => {
 app.get("/api/me", authenticateToken, async (req, res) => {
   try {
     const email = req.user.email;
+    const user = await User.findOne({ email });
     const profile = await Profile.findOne({ email });
 
-    if (!profile) {
+    if (!user || !profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
 
     res.json({
       email: profile.email, // 👈 ADD THIS
       firstName: profile.firstName,
-      profilePhoto: profile.profilePhoto ? `/uploads/${profile.profilePhoto}` : "/static/images/default-avatar.png"
+      profilePhoto: profile.profilePhoto ? `/uploads/${profile.profilePhoto}` : "/static/images/default-avatar.png",
+      emailVerified: Boolean(user.emailVerified),
     });
 
   } catch (err) {
@@ -1406,7 +2052,11 @@ app.patch("/api/profile/edit", authenticateToken, async (req, res) => {
       interests,
     } = req.body;
     if (dob_day && dob_month && dob_year) {
-      profile.dob = `${dob_year.padStart(4, '0')}-${dob_month.padStart(2, '0')}-${dob_day.padStart(2, '0')}`;
+      const dob = `${dob_year.padStart(4, '0')}-${dob_month.padStart(2, '0')}-${dob_day.padStart(2, '0')}`;
+      if (!isAdult(dob)) {
+        return res.status(400).json({ message: "You must be at least 18 years old to use this app." });
+      }
+      profile.dob = dob;
     }
     if (firstName) profile.firstName = sanitizeText(firstName);
     if (gender) profile.gender = sanitizeText(gender);
@@ -1513,13 +2163,20 @@ const server = http.createServer(app);
 // ✅ Initialize Socket.IO with the server
 const io = new Server(server, {
   cors: {
-    origin: "*", // you can restrict this in production
+    origin: CORS_ORIGINS,
+    credentials: true,
     methods: ["GET", "POST"]
   }
 });
 
 io.use((socket, next) => {
-  const token = socket.handshake?.auth?.token;
+  let token = socket.handshake?.auth?.token;
+  if (!token) {
+    const rawCookie = String(socket.handshake?.headers?.cookie || "");
+    const parts = rawCookie.split(";").map((p) => p.trim());
+    const accessPart = parts.find((part) => part.startsWith(`${ACCESS_COOKIE_NAME}=`));
+    if (accessPart) token = decodeURIComponent(accessPart.split("=").slice(1).join("="));
+  }
   if (!token) return next(new Error("Unauthorized"));
 
   try {
@@ -1544,7 +2201,7 @@ io.on("connection", (socket) => {
 
   socket.on("sendMessage", async (msg = {}) => {
     try {
-      const receiver = sanitizeText(msg.receiver);
+      const receiver = sanitizeText(msg.receiver).toLowerCase();
       const content = sanitizeText(msg.content);
       const sender = socket.userEmail;
       if (!receiver || !content || sender === receiver) return;

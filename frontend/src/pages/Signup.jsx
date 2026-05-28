@@ -41,7 +41,8 @@ export default function Signup() {
     };
 
     const handleGoogleLogin = () => {
-        window.location.href = `${API_BASE}/auth/google`;
+        const next = encodeURIComponent('/profile-setup');
+        window.location.href = `${API_BASE}/auth/google?next=${next}`;
     };
 
     return (

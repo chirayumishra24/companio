@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --check server.js && node --check passport.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "cd frontend && npm run dev"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +23,7 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "nodemailer": "^8.0.1",
     "nodemon": "^3.1.10",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
