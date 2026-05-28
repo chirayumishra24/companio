@@ -29,6 +29,7 @@ import { sortDocs } from "./lib/firestoreModel.js";
 import { isMailerConfigured, sendEmail } from "./lib/mailer.js";
 dotenv.config();
 const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT || 3000);
 const BACKEND_PUBLIC_URL = process.env.BACKEND_PUBLIC_URL || `http://localhost:${PORT}`;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString("hex");
