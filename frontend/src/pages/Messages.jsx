@@ -62,7 +62,7 @@ export default function Messages() {
           params: { user2: peerEmail },
           headers: authHeaders(),
         });
-        setMessages(Array.isArray(data) ? data : []);
+        setMessages(Array.isArray(data) ? data : Array.isArray(data?.messages) ? data.messages : []);
       } catch (apiError) {
         if (apiError.response?.status === 401 || apiError.response?.status === 403) {
           bounceToLogin();

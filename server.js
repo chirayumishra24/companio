@@ -14,6 +14,7 @@ import http from "http";
 import { Server } from "socket.io";
 import rateLimit from 'express-rate-limit';
 import Joi from "joi";
+import helmet from "helmet";
 
 // Schemas
 import { isGoogleOAuthConfigured } from "./passport.js";
@@ -554,6 +555,7 @@ async function areUsersBlocked(emailA, emailB) {
 
 // Middleware
 app.set("trust proxy", 1);
+app.use(helmet());
 app.use(
   cors({
     origin(origin, cb) {
@@ -571,10 +573,6 @@ app.use("/uploads", express.static(uploadsDir));
 if (hasFrontendDist) {
   app.use(express.static(frontendDistDir));
 }
-app.use((err, req, res, next) => {
-  console.error("Server Error:", err.stack);
-  res.status(500).json({ message: "Something went wrong!" });
-});
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
@@ -757,7 +755,7 @@ app.post("/auth/verify/request", async (req, res) => {
     await user.save();
 
     const verifyUrl = `${BACKEND_PUBLIC_URL}/auth/verify-email?token=${encodeURIComponent(verifyToken)}`;
-    console.log("📧 Email verification link:", verifyUrl);
+    if (process.env.NODE_ENV !== "production") console.log("📧 Email verification link:", verifyUrl);
     await sendEmail({
       to: email,
       subject: "Verify your Companio email",
@@ -767,7 +765,6 @@ app.post("/auth/verify/request", async (req, res) => {
 
     return res.status(200).json({
       message: "Verification link generated.",
-      ...(process.env.NODE_ENV !== "production" ? { verifyToken, verifyUrl } : {}),
     });
   } catch (err) {
     console.error("Verify request error:", err);
@@ -813,7 +810,7 @@ app.post("/auth/password-reset/request", async (req, res) => {
     await user.save();
 
     const resetUrl = `${FRONTEND_URL}/login?resetToken=${encodeURIComponent(resetToken)}`;
-    console.log("🔐 Password reset link:", resetUrl);
+    if (process.env.NODE_ENV !== "production") console.log("🔐 Password reset link:", resetUrl);
     await sendEmail({
       to: email,
       subject: "Companio password reset",
@@ -823,7 +820,6 @@ app.post("/auth/password-reset/request", async (req, res) => {
 
     return res.status(200).json({
       message: "Password reset link generated.",
-      ...(process.env.NODE_ENV !== "production" ? { resetToken, resetUrl } : {}),
     });
   } catch (err) {
     console.error("Password reset request error:", err);
@@ -997,7 +993,7 @@ app.post('/auth/signup', async (req, res) => {
     newUser.verificationRequestedAt = new Date().toISOString();
     await newUser.save();
     const verifyUrl = `${BACKEND_PUBLIC_URL}/auth/verify-email?token=${encodeURIComponent(verifyToken)}`;
-    console.log("📧 Signup verification link:", verifyUrl);
+    if (process.env.NODE_ENV !== "production") console.log("📧 Signup verification link:", verifyUrl);
     await sendEmail({
       to: email,
       subject: "Welcome to Companio - verify your email",
@@ -1012,7 +1008,6 @@ app.post('/auth/signup', async (req, res) => {
       email: newUser.email,
       profileSetupComplete: false,
       verificationRequired: REQUIRE_EMAIL_VERIFICATION && !newUser.emailVerified,
-      ...(process.env.NODE_ENV !== "production" ? { verifyToken, verifyUrl } : {}),
     });
   } catch (err) {
     console.error("Signup error:", err);
@@ -1031,7 +1026,7 @@ app.post('/auth/login', async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ message: "User not found." });
+      return res.status(400).json({ message: "Invalid email or password." });
     }
 
     if (!user.passwordHash) {
@@ -1054,7 +1049,7 @@ app.post('/auth/login', async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials." });
+      return res.status(400).json({ message: "Invalid email or password." });
     }
 
     const { accessToken } = await createAuthSession(user, req, res);
@@ -1120,17 +1115,31 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
   }
 });
 // 🧾 Save or Update Profile
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const ALLOWED_EXTENSIONS = /\.(jpg|jpeg|png|webp)$/i;
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${Date.now()}-${Math.random().toString(36).substring(2)}${ext}`);
   }
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_EXTENSIONS.test(path.extname(file.originalname))) {
+      return cb(new Error("Only .jpg, .jpeg, .png, and .webp image files are allowed"));
+    }
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      return cb(new Error("Invalid file type. Only JPEG, PNG, and WebP images are allowed"));
+    }
+    cb(null, true);
+  },
+});
 app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), async (req, res) => {
   try {
     const {
@@ -1339,7 +1348,7 @@ app.get('/api/itineraries', authenticateToken, async (req, res) => {
 });
 
 
-app.get("/api/user/:id", async (req, res) => {
+app.get("/api/user/:id", authenticateToken, async (req, res) => {
   try {
     const profileDoc = await Profile.findOne({ userId: req.params.id });
     if (!profileDoc) return res.status(404).json({ message: "Profile not found" });
@@ -1425,7 +1434,7 @@ app.patch("/api/user/:id", authenticateToken, async (req, res) => {
 });
 
 //  Safe new route 
-app.get("/api/profile/:id", async (req, res) => {
+app.get("/api/profile/:id", authenticateToken, async (req, res) => {
   try {
     const profileDoc = await Profile.findById(req.params.id);
     if (!profileDoc) return res.status(404).json({ message: "Profile not found" });
@@ -1443,6 +1452,25 @@ app.post("/api/review/:userId", authenticateToken, async (req, res) => {
 
     if (!reviewerUser || !targetProfile) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    // Prevent reviewing yourself
+    if (String(reviewerUser._id) === String(targetProfile.userId)) {
+      return res.status(400).json({ message: "Cannot review yourself" });
+    }
+
+    // Require mutual match before allowing a review
+    const targetUser = await User.findOne({ email: targetProfile.email });
+    if (!targetUser) return res.status(404).json({ message: "Target user not found" });
+    const matched = await areUsersMatched(req.user.email, targetProfile.email);
+    if (!matched) {
+      return res.status(403).json({ message: "You can only review users you have matched with" });
+    }
+
+    // Prevent duplicate reviews
+    const existingReview = await Review.findOne({ reviewer: reviewerUser._id, target: targetProfile._id });
+    if (existingReview) {
+      return res.status(409).json({ message: "You have already reviewed this user. Use the edit endpoint to update." });
     }
 
     const { rating } = req.body;
@@ -1553,7 +1581,6 @@ app.get("/api/mutual-matches", authenticateToken, async (req, res) => {
         startDate: matchUser?.startDate || "2025‑07‑01",
         endDate: matchUser?.endDate || "2025‑07‑07",
         rating: profile.rating || 4.5,
-        matchPercent: 70 + Math.floor(Math.random() * 20),
         interests: profile.interests || []
       };
     });
@@ -1787,17 +1814,21 @@ app.get("/api/messages", authenticateToken, async (req, res) => {
   if (!user2) return res.status(400).json({ message: "Missing user2" });
   if (user2 === me) return res.status(400).json({ message: "Cannot query conversation with self" });
 
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
   try {
     const matched = await areUsersMatched(me, user2);
     if (!matched) return res.status(403).json({ message: "Only matched users can view chats" });
 
-    const msgs = sortDocs(await Message.find({
+    const allMsgs = sortDocs(await Message.find({
       $or: [
         { sender: me, receiver: user2 },
         { sender: user2, receiver: me }
       ]
-    }), { createdAt: 1 }).map((doc) => doc.toObject()); // chronological
-    res.json(msgs);
+    }), { createdAt: 1 });
+    const msgs = allMsgs.slice(offset, offset + limit).map((doc) => doc.toObject());
+    res.json({ messages: msgs, total: allMsgs.length, limit, offset });
   } catch (e) {
     console.error("Fetch messages error:", e);
     res.status(500).json({ message: "Server error" });
@@ -2157,6 +2188,12 @@ app.use((req, res) => {
   res.status(404).json({ message: "Route not found: " + req.method + " " + req.url });
 });
 
+// Global error handler — must be after all routes
+app.use((err, req, res, next) => {
+  console.error("Server Error:", err.stack);
+  res.status(500).json({ message: "Something went wrong!" });
+});
+
 // ✅ Wrap Express app with HTTP server
 const server = http.createServer(app);
 
@@ -2197,7 +2234,7 @@ io.on("connection", (socket) => {
   }
 
   socket.join(userRoom(socket.userEmail));
-  console.log("🔌 Socket connected:", socket.id, socket.userEmail);
+  if (process.env.NODE_ENV !== "production") console.log("🔌 Socket connected:", socket.id, socket.userEmail);
 
   socket.on("sendMessage", async (msg = {}) => {
     try {
