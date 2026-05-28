@@ -562,7 +562,8 @@ app.use(
     origin(origin, cb) {
       if (!origin) return cb(null, true);
       if (CORS_ORIGINS.includes(origin)) return cb(null, true);
-      return cb(new Error(`Origin not allowed by CORS: ${origin}`));
+      console.warn(`⚠️ CORS blocked origin: ${origin}. Allowed origins: ${CORS_ORIGINS.join(", ")}`);
+      return cb(null, false);
     },
     credentials: true,
   })
