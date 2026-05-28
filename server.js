@@ -49,7 +49,7 @@ const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === "t
 const CORS_ORIGINS = Array.from(
   new Set(
     [FRONTEND_URL, ...(process.env.CORS_ORIGINS || "").split(",")]
-      .map((origin) => origin.trim())
+      .map((origin) => origin.trim().replace(/\/$/, ""))
       .filter(Boolean)
   )
 );
