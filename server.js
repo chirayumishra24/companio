@@ -24,6 +24,10 @@ import Review from "./models/Review.js";
 import Message from "./models/message.js";
 import Profile from "./models/profile.js";
 import SafetyReport from "./models/SafetyReport.js";
+import Post from "./models/Post.js";
+import Comment from "./models/Comment.js";
+import Follow from "./models/Follow.js";
+import Notification from "./models/Notification.js";
 import { isFirebaseConfigured } from "./lib/firebaseAdmin.js";
 import { sortDocs } from "./lib/firestoreModel.js";
 import { isMailerConfigured, sendEmail } from "./lib/mailer.js";
@@ -1163,6 +1167,10 @@ app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), 
       interests = "",
       bio = "",
       location = "",
+      username = "",
+      currentCity = "",
+      travelCountries = "",
+      coverPhoto = ""
     } = req.body;
 
     const email = req.user.email;
@@ -1173,10 +1181,22 @@ app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), 
       return res.status(400).json({ message: "You must be at least 18 years old to use this app." });
     }
 
+    // Check username uniqueness if provided
+    let cleanUsername = sanitizeText(username).toLowerCase().trim();
+    if (!cleanUsername) {
+      // Auto-generate username from email prefix if empty
+      cleanUsername = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "").slice(0, 15);
+    }
+
+    const existing = await Profile.findOne({ username: cleanUsername });
+    if (existing && existing.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({ message: "Username is already taken." });
+    }
+
     // Handle photo uploads
     const photos = req.files?.map(file => file.filename) || [];
 
-    // ✅ Handle social links from form fields like: socialLinks[instagram]
+    // Handle social links from form fields like: socialLinks[instagram]
     const socialLinks = {
       instagram: normalizeExternalUrl(req.body["socialLinks[instagram]"] || ""),
       linkedin: normalizeExternalUrl(req.body["socialLinks[linkedin]"] || "")
@@ -1196,12 +1216,22 @@ app.post("/auth/profile-setup", authenticateToken, upload.array("photos[]", 6), 
       photos,
       bio: sanitizeText(bio),
       location: sanitizeText(location),
-      socialLinks
+      socialLinks,
+      username: cleanUsername,
+      currentCity: sanitizeText(currentCity),
+      travelCountries: sanitizeCsvToArray(travelCountries),
+      coverPhoto: sanitizeText(coverPhoto) || (photos.length > 0 ? photos[0] : "")
     };
 
     // Check if user already has a profile
     const existingProfile = await Profile.findOne({ email });
     if (existingProfile) {
+      // Merge photos if updating
+      if (photos.length > 0) {
+        profileData.photos = Array.from(new Set([...existingProfile.photos, ...photos]));
+      } else {
+        profileData.photos = existingProfile.photos;
+      }
       await Profile.updateOne({ email }, profileData);
       res.status(200).json({ message: "Profile updated" });
     } else {
@@ -2186,6 +2216,631 @@ app.delete("/api/itinerary/:id", authenticateToken, async (req, res) => {
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     console.error("Itinerary deletion error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ==========================================
+// TRAVEL SOCIAL MEDIA ROUTES
+// ==========================================
+
+// Helper function to create notification
+async function createNotification({ recipientEmail, type, fromEmail, fromName, postId, message }) {
+  try {
+    if (recipientEmail.toLowerCase() === fromEmail.toLowerCase()) return;
+    await Notification.create({
+      recipientEmail: recipientEmail.toLowerCase(),
+      type,
+      fromEmail: fromEmail.toLowerCase(),
+      fromName: sanitizeText(fromName),
+      postId: postId || "",
+      message: sanitizeText(message),
+      read: false
+    });
+  } catch (err) {
+    console.error("Error creating notification:", err);
+  }
+}
+
+// Check username availability
+app.get("/api/username/check/:username", authenticateToken, async (req, res) => {
+  try {
+    const username = sanitizeText(req.params.username).toLowerCase().trim();
+    if (!/^[a-zA-Z0-9_]{3,15}$/.test(username)) {
+      return res.json({ available: false, message: "Invalid username format (3-15 chars, alphanumeric/underscore)" });
+    }
+    const existing = await Profile.findOne({ username });
+    if (existing && existing.email.toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.json({ available: false, message: "Username already taken" });
+    }
+    res.json({ available: true });
+  } catch (err) {
+    console.error("Check username error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Create a post
+app.post("/api/posts", authenticateToken, upload.array("images[]", 10), async (req, res) => {
+  try {
+    const caption = sanitizeText(req.body.caption || "");
+    const location = sanitizeText(req.body.location || "");
+    const visibility = req.body.visibility || "public";
+    
+    let tags = [];
+    if (req.body.tags) {
+      if (Array.isArray(req.body.tags)) {
+        tags = req.body.tags.map(t => sanitizeText(t).toLowerCase().replace("#", ""));
+      } else {
+        tags = sanitizeCsvToArray(req.body.tags).map(t => t.toLowerCase().replace("#", ""));
+      }
+    } else {
+      const matches = caption.match(/#\w+/g);
+      if (matches) {
+        tags = matches.map(m => m.slice(1).toLowerCase());
+      }
+    }
+
+    const files = req.files || [];
+    const images = files.map(f => f.filename);
+
+    const profile = await Profile.findOne({ email: req.user.email });
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found" });
+    }
+
+    const post = await Post.create({
+      authorEmail: req.user.email.toLowerCase(),
+      authorId: profile._id,
+      type: "post",
+      caption,
+      images,
+      location,
+      tags,
+      likes: [],
+      likesCount: 0,
+      commentsCount: 0,
+      visibility
+    });
+
+    profile.postsCount = (profile.postsCount || 0) + 1;
+    await profile.save();
+
+    res.status(201).json(post);
+  } catch (err) {
+    console.error("Create post error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get feed (posts from self and people user follows)
+app.get("/api/posts/feed", authenticateToken, async (req, res) => {
+  try {
+    const email = req.user.email.toLowerCase();
+    const follows = await Follow.find({ followerEmail: email, status: "active" });
+    const followingEmails = follows.map(f => f.followingEmail.toLowerCase());
+    const emailsToFetch = [email, ...followingEmails];
+
+    let posts = await Post.find({
+      authorEmail: { $in: emailsToFetch }
+    });
+
+    posts = posts.filter(post => {
+      const author = post.authorEmail.toLowerCase();
+      if (author === email) return true;
+      if (post.visibility === "private") return false;
+      if (post.visibility === "followers" && !followingEmails.includes(author)) return false;
+      return true;
+    });
+
+    posts = sortDocs(posts, { createdAt: -1 });
+
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 20);
+    const startIdx = (page - 1) * limit;
+    const paginatedPosts = posts.slice(startIdx, startIdx + limit);
+
+    const enrichedPosts = [];
+    for (const post of paginatedPosts) {
+      const authorProfile = await Profile.findOne({ email: post.authorEmail });
+      enrichedPosts.push({
+        ...post.toObject(),
+        author: authorProfile ? {
+          _id: authorProfile._id,
+          firstName: authorProfile.firstName,
+          username: authorProfile.username || authorProfile.firstName.toLowerCase(),
+          profilePhoto: authorProfile.profilePhoto
+        } : null
+      });
+    }
+
+    res.json(enrichedPosts);
+  } catch (err) {
+    console.error("Feed error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get explore feed
+app.get("/api/posts/explore", authenticateToken, async (req, res) => {
+  try {
+    const search = sanitizeText(req.query.search || "").toLowerCase();
+    let posts = await Post.find({ visibility: "public" });
+
+    if (search) {
+      posts = posts.filter(post => {
+        const captionMatch = post.caption.toLowerCase().includes(search);
+        const locationMatch = post.location.toLowerCase().includes(search);
+        const tagMatch = post.tags.some(t => t.includes(search));
+        return captionMatch || locationMatch || tagMatch;
+      });
+    }
+
+    posts = sortDocs(posts, { likesCount: -1 });
+
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 20);
+    const startIdx = (page - 1) * limit;
+    const paginatedPosts = posts.slice(startIdx, startIdx + limit);
+
+    const enrichedPosts = [];
+    for (const post of paginatedPosts) {
+      const authorProfile = await Profile.findOne({ email: post.authorEmail });
+      enrichedPosts.push({
+        ...post.toObject(),
+        author: authorProfile ? {
+          _id: authorProfile._id,
+          firstName: authorProfile.firstName,
+          username: authorProfile.username || authorProfile.firstName.toLowerCase(),
+          profilePhoto: authorProfile.profilePhoto
+        } : null
+      });
+    }
+
+    res.json(enrichedPosts);
+  } catch (err) {
+    console.error("Explore error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get single post with comments
+app.get("/api/posts/:id", authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const myEmail = req.user.email.toLowerCase();
+    const authorEmail = post.authorEmail.toLowerCase();
+    if (authorEmail !== myEmail) {
+      if (post.visibility === "private") {
+        return res.status(403).json({ message: "This post is private" });
+      }
+      if (post.visibility === "followers") {
+        const isFollowing = await Follow.findOne({ followerEmail: myEmail, followingEmail: authorEmail, status: "active" });
+        if (!isFollowing) {
+          return res.status(403).json({ message: "This post is visible to followers only" });
+        }
+      }
+    }
+
+    const authorProfile = await Profile.findOne({ email: post.authorEmail });
+    let comments = await Comment.find({ postId: post._id });
+    comments = sortDocs(comments, { createdAt: 1 });
+
+    const enrichedComments = [];
+    for (const comment of comments) {
+      const commenterProfile = await Profile.findOne({ email: comment.authorEmail });
+      enrichedComments.push({
+        ...comment.toObject(),
+        author: commenterProfile ? {
+          _id: commenterProfile._id,
+          firstName: commenterProfile.firstName,
+          username: commenterProfile.username || commenterProfile.firstName.toLowerCase(),
+          profilePhoto: commenterProfile.profilePhoto
+        } : null
+      });
+    }
+
+    res.json({
+      ...post.toObject(),
+      author: authorProfile ? {
+        _id: authorProfile._id,
+        firstName: authorProfile.firstName,
+        username: authorProfile.username || authorProfile.firstName.toLowerCase(),
+        profilePhoto: authorProfile.profilePhoto
+      } : null,
+      comments: enrichedComments
+    });
+  } catch (err) {
+    console.error("Get post detail error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Delete own post
+app.delete("/api/posts/:id", authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    if (post.authorEmail.toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    for (const image of post.images) {
+      const filePath = path.join(uploadsDir, image);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    const comments = await Comment.find({ postId: post._id });
+    for (const comment of comments) {
+      await comment.deleteOne();
+    }
+
+    await post.deleteOne();
+
+    const profile = await Profile.findOne({ email: req.user.email });
+    if (profile) {
+      profile.postsCount = Math.max(0, (profile.postsCount || 0) - 1);
+      await profile.save();
+    }
+
+    res.json({ message: "Post deleted successfully" });
+  } catch (err) {
+    console.error("Delete post error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Like/Unlike post
+app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const myEmail = req.user.email.toLowerCase();
+    const liked = post.likes.includes(myEmail);
+
+    if (liked) {
+      post.likes = post.likes.filter(email => email !== myEmail);
+    } else {
+      post.likes.push(myEmail);
+    }
+    post.likesCount = post.likes.length;
+    await post.save();
+
+    if (!liked && post.authorEmail.toLowerCase() !== myEmail) {
+      const myProfile = await Profile.findOne({ email: myEmail });
+      const myName = myProfile ? myProfile.firstName : req.user.email;
+      await createNotification({
+        recipientEmail: post.authorEmail,
+        type: "like",
+        fromEmail: myEmail,
+        fromName: myName,
+        postId: post._id,
+        message: `${myName} liked your post.`
+      });
+    }
+
+    res.json({ liked: !liked, likesCount: post.likesCount });
+  } catch (err) {
+    console.error("Like post error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Comment on post
+app.post("/api/posts/:id/comment", authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const content = sanitizeText(req.body.content || "");
+    if (!content) return res.status(400).json({ message: "Comment cannot be empty" });
+
+    const myEmail = req.user.email.toLowerCase();
+    const myProfile = await Profile.findOne({ email: myEmail });
+    if (!myProfile) return res.status(404).json({ message: "Profile not found" });
+
+    const parentCommentId = req.body.parentCommentId || "";
+
+    const comment = await Comment.create({
+      postId: post._id,
+      authorEmail: myEmail,
+      authorId: myProfile._id,
+      content,
+      parentCommentId,
+      likes: [],
+      likesCount: 0
+    });
+
+    post.commentsCount = (post.commentsCount || 0) + 1;
+    await post.save();
+
+    if (post.authorEmail.toLowerCase() !== myEmail) {
+      const myName = myProfile.firstName;
+      await createNotification({
+        recipientEmail: post.authorEmail,
+        type: "comment",
+        fromEmail: myEmail,
+        fromName: myName,
+        postId: post._id,
+        message: `${myName} commented: "${content.substring(0, 30)}${content.length > 30 ? '...' : ''}"`
+      });
+    }
+
+    res.status(201).json({
+      ...comment.toObject(),
+      author: {
+        _id: myProfile._id,
+        firstName: myProfile.firstName,
+        username: myProfile.username || myProfile.firstName.toLowerCase(),
+        profilePhoto: myProfile.profilePhoto
+      }
+    });
+  } catch (err) {
+    console.error("Comment post error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Delete comment
+app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    if (comment.authorEmail.toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const post = await Post.findById(comment.postId);
+    if (post) {
+      post.commentsCount = Math.max(0, (post.commentsCount || 0) - 1);
+      await post.save();
+    }
+
+    await comment.deleteOne();
+    res.json({ message: "Comment deleted" });
+  } catch (err) {
+    console.error("Delete comment error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Follow user
+app.post("/api/follow/:email", authenticateToken, async (req, res) => {
+  try {
+    const myEmail = req.user.email.toLowerCase();
+    const targetEmail = req.params.email.toLowerCase();
+
+    if (myEmail === targetEmail) {
+      return res.status(400).json({ message: "You cannot follow yourself" });
+    }
+
+    const targetProfile = await Profile.findOne({ email: targetEmail });
+    if (!targetProfile) {
+      return res.status(404).json({ message: "Target user not found" });
+    }
+
+    const existing = await Follow.findOne({ followerEmail: myEmail, followingEmail: targetEmail });
+    if (existing) {
+      if (existing.status === "active") {
+        return res.status(400).json({ message: "Already following this user" });
+      } else {
+        existing.status = "active";
+        await existing.save();
+      }
+    } else {
+      await Follow.create({
+        followerEmail: myEmail,
+        followingEmail: targetEmail,
+        status: "active"
+      });
+    }
+
+    const myProfile = await Profile.findOne({ email: myEmail });
+    if (myProfile) {
+      myProfile.followingCount = (myProfile.followingCount || 0) + 1;
+      await myProfile.save();
+    }
+
+    targetProfile.followersCount = (targetProfile.followersCount || 0) + 1;
+    await targetProfile.save();
+
+    const myName = myProfile ? myProfile.firstName : req.user.email;
+    await createNotification({
+      recipientEmail: targetEmail,
+      type: "follow",
+      fromEmail: myEmail,
+      fromName: myName,
+      message: `${myName} started following you.`
+    });
+
+    res.json({ following: true });
+  } catch (err) {
+    console.error("Follow error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Unfollow user
+app.delete("/api/follow/:email", authenticateToken, async (req, res) => {
+  try {
+    const myEmail = req.user.email.toLowerCase();
+    const targetEmail = req.params.email.toLowerCase();
+
+    const follow = await Follow.findOne({ followerEmail: myEmail, followingEmail: targetEmail });
+    if (!follow) {
+      return res.status(400).json({ message: "You are not following this user" });
+    }
+
+    await follow.deleteOne();
+
+    const myProfile = await Profile.findOne({ email: myEmail });
+    if (myProfile) {
+      myProfile.followingCount = Math.max(0, (myProfile.followingCount || 0) - 1);
+      await myProfile.save();
+    }
+
+    const targetProfile = await Profile.findOne({ email: targetEmail });
+    if (targetProfile) {
+      targetProfile.followersCount = Math.max(0, (targetProfile.followersCount || 0) - 1);
+      await targetProfile.save();
+    }
+
+    res.json({ following: false });
+  } catch (err) {
+    console.error("Unfollow error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get followers
+app.get("/api/followers/:email", authenticateToken, async (req, res) => {
+  try {
+    const email = req.params.email.toLowerCase();
+    const follows = await Follow.find({ followingEmail: email, status: "active" });
+
+    const followers = [];
+    for (const f of follows) {
+      const p = await Profile.findOne({ email: f.followerEmail });
+      if (p) {
+        followers.push({
+          firstName: p.firstName,
+          email: p.email,
+          username: p.username || p.firstName.toLowerCase(),
+          profilePhoto: p.profilePhoto,
+          bio: p.bio
+        });
+      }
+    }
+    res.json(followers);
+  } catch (err) {
+    console.error("Get followers error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get following
+app.get("/api/following/:email", authenticateToken, async (req, res) => {
+  try {
+    const email = req.params.email.toLowerCase();
+    const follows = await Follow.find({ followerEmail: email, status: "active" });
+
+    const following = [];
+    for (const f of follows) {
+      const p = await Profile.findOne({ email: f.followingEmail });
+      if (p) {
+        following.push({
+          firstName: p.firstName,
+          email: p.email,
+          username: p.username || p.firstName.toLowerCase(),
+          profilePhoto: p.profilePhoto,
+          bio: p.bio
+        });
+      }
+    }
+    res.json(following);
+  } catch (err) {
+    console.error("Get following error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get notifications
+app.get("/api/notifications", authenticateToken, async (req, res) => {
+  try {
+    const myEmail = req.user.email.toLowerCase();
+    let list = await Notification.find({ recipientEmail: myEmail });
+    list = sortDocs(list, { createdAt: -1 });
+    res.json(list.slice(0, 50));
+  } catch (err) {
+    console.error("Get notifications error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Mark notifications read
+app.patch("/api/notifications/read", authenticateToken, async (req, res) => {
+  try {
+    const myEmail = req.user.email.toLowerCase();
+    const list = await Notification.find({ recipientEmail: myEmail, read: false });
+
+    for (const notif of list) {
+      notif.read = true;
+      await notif.save();
+    }
+
+    res.json({ message: "Notifications marked as read" });
+  } catch (err) {
+    console.error("Mark notifications read error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Search users
+app.get("/api/users/search", authenticateToken, async (req, res) => {
+  try {
+    const query = sanitizeText(req.query.q || "").toLowerCase();
+    if (!query) return res.json([]);
+
+    const allProfiles = await Profile.find();
+    const results = allProfiles.filter(p => {
+      const nameMatch = p.firstName && p.firstName.toLowerCase().includes(query);
+      const usernameMatch = p.username && p.username.toLowerCase().includes(query);
+      return nameMatch || usernameMatch;
+    }).slice(0, 15).map(p => ({
+      _id: p._id,
+      firstName: p.firstName,
+      email: p.email,
+      username: p.username || p.firstName.toLowerCase(),
+      profilePhoto: p.profilePhoto,
+      bio: p.bio,
+      currentCity: p.currentCity || ""
+    }));
+
+    res.json(results);
+  } catch (err) {
+    console.error("User search error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get public profile
+app.get("/api/profile/public/:username", authenticateToken, async (req, res) => {
+  try {
+    const username = sanitizeText(req.params.username).toLowerCase().trim();
+    
+    let profile = await Profile.findOne({ username });
+    if (!profile) {
+      const allProfiles = await Profile.find();
+      profile = allProfiles.find(p => (p.username && p.username.toLowerCase() === username) || p.firstName.toLowerCase() === username);
+      if (!profile) return res.status(404).json({ message: "Profile not found" });
+    }
+
+    const myEmail = req.user.email.toLowerCase();
+    const isFollowing = await Follow.findOne({ followerEmail: myEmail, followingEmail: profile.email.toLowerCase(), status: "active" });
+
+    let posts = await Post.find({ authorEmail: profile.email.toLowerCase() });
+    posts = posts.filter(p => {
+      if (profile.email.toLowerCase() === myEmail) return true;
+      if (p.visibility === "private") return false;
+      if (p.visibility === "followers" && !isFollowing) return false;
+      return true;
+    });
+    posts = sortDocs(posts, { createdAt: -1 });
+
+    res.json({
+      profile: {
+        ...profile.toObject(),
+        isFollowing: !!isFollowing
+      },
+      posts: posts.map(p => p.toObject())
+    });
+  } catch (err) {
+    console.error("Get public profile error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

@@ -35,20 +35,20 @@ export default function Hero() {
                 <div className="max-w-6xl mx-auto relative z-10 grid lg:grid-cols-2 gap-10 items-center">
                     <div>
                         <p className="inline-block bg-white border-4 border-black px-3 py-1 font-black uppercase text-sm mb-4 shadow-brutal-sm anim-enter">
-                            Travel Companions, Not Just Swipes
+                            Travel Social Network, Not Just Swipes
                         </p>
                         <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.95] anim-enter anim-delay-1">
                             Meet Your Next
                             <span className="block bg-brutal-yellow border-4 border-black px-3 py-2 mt-2 -rotate-1 w-fit shadow-brutal pulse-shadow">
-                                Trip Partner
+                                Travel Community
                             </span>
                         </h1>
                         <p className="mt-6 text-lg md:text-xl font-bold max-w-xl bg-white border-4 border-black p-4 shadow-brutal-sm anim-enter anim-delay-2">
-                            Companio helps solo travelers match by vibe, destination, and travel style, then plan trips together with AI-generated itineraries and map links.
+                            Companio is the travel social network where backpackers, adventurers, and explorers share trip stories, follow other travelers, and discover destination itineraries.
                         </p>
                         <div className="mt-7 flex flex-wrap gap-3 anim-enter anim-delay-3">
                             {isAuthenticated ? (
-                                <Link to="/matches" className="neo-btn bg-brutal-green text-lg shadow-brutal-lg">Start Discovering</Link>
+                                <Link to="/" className="neo-btn bg-brutal-green text-lg shadow-brutal-lg">Go to Feed</Link>
                             ) : (
                                 <Link to="/signup" className="neo-btn bg-brutal-green text-lg shadow-brutal-lg">Create Free Account</Link>
                             )}
@@ -58,19 +58,19 @@ export default function Hero() {
 
                     <div className="grid sm:grid-cols-2 gap-4">
                         <div className="neo-card bg-white rotate-1 anim-enter anim-delay-1">
-                            <p className="text-sm font-black uppercase bg-brutal-cyan border-2 border-black px-2 py-1 inline-block">Smart Matching</p>
-                            <h3 className="text-2xl font-black mt-3 uppercase">Swipe by travel vibe</h3>
-                            <p className="font-semibold mt-2">Like or pass profiles and unlock chat on mutual match only.</p>
+                          <p className="text-sm font-black uppercase bg-brutal-cyan border-2 border-black px-2 py-1 inline-block">Share Stories</p>
+                          <h3 className="text-2xl font-black mt-3 uppercase">Journal your trips</h3>
+                          <p className="font-semibold mt-2">Post photos and share travel updates on your public traveler feed.</p>
                         </div>
                         <div className="neo-card bg-brutal-yellow -rotate-1 anim-enter anim-delay-2">
-                            <p className="text-sm font-black uppercase bg-white border-2 border-black px-2 py-1 inline-block">Private Chat</p>
-                            <h3 className="text-2xl font-black mt-3 uppercase">Plan together safely</h3>
-                            <p className="font-semibold mt-2">Messaging is restricted to mutual matches to reduce spam and abuse.</p>
+                          <p className="text-sm font-black uppercase bg-white border-2 border-black px-2 py-1 inline-block">Explore Travelers</p>
+                          <h3 className="text-2xl font-black mt-3 uppercase">Follow your peers</h3>
+                          <p className="font-semibold mt-2">Stay updated on friends' and suggested travelers' latest travel logs and maps.</p>
                         </div>
                         <div className="neo-card bg-brutal-cyan -rotate-1 sm:col-span-2 anim-enter anim-delay-3 glow-card">
-                            <p className="text-sm font-black uppercase bg-white border-2 border-black px-2 py-1 inline-block">AI Itinerary</p>
-                            <h3 className="text-2xl font-black mt-3 uppercase">Instant trip blueprint</h3>
-                            <p className="font-semibold mt-2">Generate day-wise itinerary with direct Google Maps links for each stop.</p>
+                          <p className="text-sm font-black uppercase bg-white border-2 border-black px-2 py-1 inline-block">AI Itinerary</p>
+                          <h3 className="text-2xl font-black mt-3 uppercase">Instant trip blueprint</h3>
+                          <p className="font-semibold mt-2">Generate day-wise itinerary with direct Google Maps links for each stop.</p>
                         </div>
                     </div>
                 </div>
@@ -88,24 +88,24 @@ export default function Hero() {
             <section className="py-14 md:py-20 px-4 border-b-8 border-black relative diagonal-stripes">
                 <div className="max-w-6xl mx-auto relative z-10">
                     <h2 className="text-4xl md:text-5xl font-black uppercase mb-10 inline-block bg-brutal-pink text-white border-4 border-black px-4 py-2 shadow-brutal-lg anim-enter">
-                        Built For Public Launch
+                        Built For Global Explorers
                     </h2>
 
                     <div className="grid md:grid-cols-3 gap-6">
                         <article className="neo-card bg-white anim-enter anim-delay-1">
-                            <div className="text-4xl mb-3">🔐</div>
-                            <h3 className="font-black text-2xl uppercase mb-2">1. Account Security</h3>
-                            <p className="font-semibold">JWT auth, protected API routes, and restricted profile mutation paths.</p>
+                            <div className="text-4xl mb-3">🌍</div>
+                            <h3 className="font-black text-2xl uppercase mb-2">1. Visual Feed</h3>
+                            <p className="font-semibold">Browse beautiful travel photos, hashtags, and locations posted by the community.</p>
                         </article>
                         <article className="neo-card bg-brutal-yellow anim-enter anim-delay-2">
-                            <div className="text-4xl mb-3">🚀</div>
-                            <h3 className="font-black text-2xl uppercase mb-2">2. Real User Flow</h3>
-                            <p className="font-semibold">Signup, profile setup, discovery, mutual matches, and messaging in one flow.</p>
+                            <div className="text-4xl mb-3">👥</div>
+                            <h3 className="font-black text-2xl uppercase mb-2">2. Connected Network</h3>
+                            <p className="font-semibold">Follow travelers, comment on their stories, get notified of likes, and chat directly.</p>
                         </article>
                         <article className="neo-card bg-brutal-cyan anim-enter anim-delay-3">
                             <div className="text-4xl mb-3">🤖</div>
-                            <h3 className="font-black text-2xl uppercase mb-2">3. AI Planning Layer</h3>
-                            <p className="font-semibold">Groq/OpenAI fallback support with actionable map links to plan faster.</p>
+                            <h3 className="font-black text-2xl uppercase mb-2">3. AI Itineraries</h3>
+                            <p className="font-semibold">Generate day-wise travel plans with Google Maps integration to explore without friction.</p>
                         </article>
                     </div>
                 </div>

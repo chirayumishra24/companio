@@ -11,36 +11,72 @@ import NotFound from "./pages/NotFound";
 import ProfileSetup from "./pages/ProfileSetup";
 import SetPassword from "./pages/SetPassword";
 import Signup from "./pages/Signup";
-import { API_BASE, clearToken, getToken, setToken } from "./lib/config";
+import Feed from "./pages/Feed";
+import Explore from "./pages/Explore";
+import CreatePost from "./pages/CreatePost";
+import PostDetail from "./pages/PostDetail";
+import PublicProfile from "./pages/PublicProfile";
+import Notifications from "./pages/Notifications";
+import NotificationBell from "./components/NotificationBell";
+import { API_BASE, clearToken, getToken, setToken, authHeaders } from "./lib/config";
 
-const navLinkClass = "neo-btn py-2 px-4 shadow-brutal-sm text-sm border-2";
+const navLinkClass = "neo-btn py-2 px-4 shadow-brutal-sm text-sm border-2 font-bold uppercase transition-all hover:bg-black hover:text-white";
 
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userLoading, setUserLoading] = useState(true);
+
+  const isAuthenticated = Boolean(getToken());
+
+  const fetchCurrentUser = async () => {
+    if (!isAuthenticated) {
+      setCurrentUser(null);
+      setUserLoading(false);
+      return;
+    }
+    setUserLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/me`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data);
+      }
+    } catch (err) {
+      console.error("Fetch current user error:", err);
+    } finally {
+      setUserLoading(false);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const token = params.get("token");
-    if (!token) return;
-
-    setToken(token);
-    params.delete("token");
-    const cleanSearch = params.toString();
-    const cleanUrl = `${location.pathname}${cleanSearch ? `?${cleanSearch}` : ""}`;
-    navigate(cleanUrl, { replace: true });
+    if (token) {
+      setToken(token);
+      params.delete("token");
+      const cleanSearch = params.toString();
+      const cleanUrl = `${location.pathname}${cleanSearch ? `?${cleanSearch}` : ""}`;
+      navigate(cleanUrl, { replace: true });
+    }
   }, [location.pathname, location.search, navigate]);
 
-  const isAuthenticated = Boolean(getToken());
+  useEffect(() => {
+    fetchCurrentUser();
+  }, [isAuthenticated]);
 
   const logout = async () => {
     try {
       await axios.post(`${API_BASE}/auth/logout`);
     } catch {
-      // ignore logout network errors and clear client state regardless
+      // ignore
     }
     clearToken();
+    setCurrentUser(null);
     navigate("/login", { replace: true });
   };
 
@@ -61,15 +97,24 @@ function App() {
             MENU
           </button>
 
-          <div className={`${mobileOpen ? "flex" : "hidden"} w-full md:w-auto md:flex gap-2 md:gap-3 flex-col md:flex-row`}>
-            <Link to="/" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>HOME</Link>
+          <div className={`${mobileOpen ? "flex" : "hidden"} w-full md:w-auto md:flex items-center gap-2 md:gap-3 flex-col md:flex-row`}>
+            <Link to="/" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>
+              {isAuthenticated ? "Feed" : "Home"}
+            </Link>
             {isAuthenticated ? (
               <>
-                <Link to="/matches" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-cyan text-center`}>DISCOVER</Link>
-                <Link to="/messages" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-green text-center`}>MESSAGES</Link>
-                <Link to="/itinerary-assistant" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>AI TRIP</Link>
-                <Link to="/profile-setup" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>PROFILE</Link>
-                <button type="button" onClick={logout} className={`${navLinkClass} bg-black text-white text-center`}>
+                <Link to="/explore" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-cyan text-center`}>Explore</Link>
+                <Link to="/create" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-green text-center`}>Create (+)</Link>
+                <Link to="/messages" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>Messages</Link>
+                <Link to="/itinerary-assistant" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>AI Trip</Link>
+                <Link to="/profile" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-purple text-white text-center`}>Profile</Link>
+                
+                {/* Notification Bell */}
+                <div onClick={() => setMobileOpen(false)} className="self-stretch flex justify-center items-center">
+                  <NotificationBell />
+                </div>
+
+                <button type="button" onClick={logout} className={`${navLinkClass} bg-black text-white text-center w-full md:w-auto`}>
                   LOGOUT
                 </button>
               </>
@@ -84,21 +129,45 @@ function App() {
       </nav>
 
       <main className="min-h-[calc(100vh-84px)]">
-        <Routes>
-          <Route path="/" element={<Hero />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/set-password" element={<SetPassword />} />
+        {userLoading && isAuthenticated ? (
+          <div className="min-h-screen bg-brutal-bg flex items-center justify-center">
+            <div className="neo-card bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_#000] font-black uppercase text-2xl">
+              Authenticating... ✈️
+            </div>
+          </div>
+        ) : (
+          <Routes>
+            <Route
+              path="/"
+              element={
+                isAuthenticated && currentUser ? (
+                  <Feed currentUser={currentUser} />
+                ) : (
+                  <Hero />
+                )
+              }
+            />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/set-password" element={<SetPassword />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route path="/matches" element={<Matches />} />
-            <Route path="/profile-setup" element={<ProfileSetup />} />
-            <Route path="/itinerary-assistant" element={<ItineraryAssistant />} />
-            <Route path="/messages/:matchId?" element={<Messages />} />
-          </Route>
+            <Route element={<ProtectedRoute />}>
+              <Route path="/explore" element={<Explore currentUser={currentUser} />} />
+              <Route path="/create" element={<CreatePost />} />
+              <Route path="/post/:id" element={<PostDetail currentUser={currentUser} />} />
+              <Route path="/profile" element={<PublicProfile currentUser={currentUser} />} />
+              <Route path="/u/:username" element={<PublicProfile currentUser={currentUser} />} />
+              <Route path="/notifications" element={<Notifications />} />
+              
+              <Route path="/matches" element={<Matches />} />
+              <Route path="/profile-setup" element={<ProfileSetup />} />
+              <Route path="/itinerary-assistant" element={<ItineraryAssistant />} />
+              <Route path="/messages/:matchId?" element={<Messages />} />
+            </Route>
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        )}
       </main>
     </div>
   );
