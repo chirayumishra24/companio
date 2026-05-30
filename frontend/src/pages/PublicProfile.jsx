@@ -32,6 +32,9 @@ export default function PublicProfile({ currentUser }) {
           const ownProfile = await ownRes.json();
           const uname = ownProfile.username || ownProfile.firstName.toLowerCase();
           url = `${API_BASE}/api/profile/public/${encodeURIComponent(uname)}`;
+        } else if (ownRes.status === 404) {
+          navigate("/profile-setup");
+          return;
         } else {
           setError("Failed to fetch profile info");
           setLoading(false);
