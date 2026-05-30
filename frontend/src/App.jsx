@@ -18,6 +18,9 @@ import PostDetail from "./pages/PostDetail";
 import PublicProfile from "./pages/PublicProfile";
 import Notifications from "./pages/Notifications";
 import NotificationBell from "./components/NotificationBell";
+import SavedPosts from "./pages/SavedPosts";
+import HashtagExplore from "./pages/HashtagExplore";
+import LocationExplore from "./pages/LocationExplore";
 import { API_BASE, clearToken, getToken, setToken, authHeaders } from "./lib/config";
 
 const navLinkClass = "neo-btn py-2 px-4 shadow-brutal-sm text-sm border-2 font-bold uppercase transition-all hover:bg-black hover:text-white";
@@ -105,6 +108,7 @@ function App() {
               <>
                 <Link to="/explore" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-cyan text-center`}>Explore</Link>
                 <Link to="/create" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-green text-center`}>Create (+)</Link>
+                <Link to="/saved" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-yellow text-center`}>Saved</Link>
                 <Link to="/messages" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>Messages</Link>
                 <Link to="/itinerary-assistant" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>AI Trip</Link>
                 <Link to="/profile" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-purple text-white text-center`}>Profile</Link>
@@ -157,6 +161,9 @@ function App() {
               <Route path="/post/:id" element={<PostDetail currentUser={currentUser} />} />
               <Route path="/profile" element={<PublicProfile currentUser={currentUser} />} />
               <Route path="/u/:username" element={<PublicProfile currentUser={currentUser} />} />
+              <Route path="/saved" element={<SavedPosts currentUser={currentUser} />} />
+              <Route path="/tag/:hashtag" element={<HashtagExplore currentUser={currentUser} />} />
+              <Route path="/location/:place" element={<LocationExplore currentUser={currentUser} />} />
               <Route path="/notifications" element={<Notifications />} />
               
               <Route path="/matches" element={<Matches />} />

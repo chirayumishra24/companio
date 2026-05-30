@@ -1,11 +1,32 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import ImageCarousel from "./ImageCarousel";
-import { assetUrl } from "../lib/config";
+import { assetUrl, authHeaders, API_BASE } from "../lib/config";
 
 export default function PostCard({ post, currentUserEmail, onLike, onDelete }) {
   const isOwner = post.authorEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
   const likedByMe = post.likes?.includes(currentUserEmail);
+  const [isBookmarked, setIsBookmarked] = useState(!!post.bookmarked);
+
+  useEffect(() => {
+    setIsBookmarked(!!post.bookmarked);
+  }, [post.bookmarked]);
+
+  const handleBookmarkToggle = async (e) => {
+    e.preventDefault();
+    const method = isBookmarked ? "DELETE" : "POST";
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${post._id}/bookmark`, {
+        method,
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        setIsBookmarked(!isBookmarked);
+      }
+    } catch (err) {
+      console.error("Bookmark error:", err);
+    }
+  };
 
   const authorAvatar = post.author?.profilePhoto
     ? assetUrl(`uploads/${post.author.profilePhoto}`)
@@ -20,7 +41,7 @@ export default function PostCard({ post, currentUserEmail, onLike, onDelete }) {
         return (
           <Link
             key={index}
-            to={`/explore?search=${tag}`}
+            to={`/tag/${tag}`}
             className="text-brutal-blue font-black hover:underline mr-1"
           >
             {part}
@@ -55,9 +76,12 @@ export default function PostCard({ post, currentUserEmail, onLike, onDelete }) {
         </Link>
         <div className="flex items-center space-x-2">
           {post.location && (
-            <span className="text-xs font-bold px-2 py-1 bg-brutal-yellow border-2 border-black shadow-[2px_2px_0px_0px_#000]">
+            <Link
+              to={`/location/${encodeURIComponent(post.location)}`}
+              className="text-xs font-bold px-2 py-1 bg-brutal-yellow border-2 border-black shadow-[2px_2px_0px_0px_#000] hover:bg-black hover:text-white transition-all block"
+            >
               📍 {post.location}
-            </span>
+            </Link>
           )}
           {isOwner && onDelete && (
             <button
@@ -102,6 +126,15 @@ export default function PostCard({ post, currentUserEmail, onLike, onDelete }) {
             <span>💬</span>
             <span>{post.commentsCount || 0}</span>
           </Link>
+          <button
+            onClick={handleBookmarkToggle}
+            className={`border-2 border-black font-black uppercase text-xs md:text-sm px-4 py-2 shadow-[2px_2px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all flex items-center space-x-2 ${
+              isBookmarked ? "bg-brutal-yellow" : "bg-white hover:bg-brutal-yellow"
+            }`}
+            title={isBookmarked ? "Remove Bookmark" : "Bookmark Post"}
+          >
+            <span>{isBookmarked ? "🔖" : "📁"}</span>
+          </button>
         </div>
         <span className="text-xs text-gray-500 font-bold">
           {new Date(post.createdAt).toLocaleDateString(undefined, {

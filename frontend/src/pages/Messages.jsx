@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import axios from "axios";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { API_BASE, assetUrl, authHeaders, clearToken, getToken } from "../lib/config";
+import { getSocket } from "../lib/socket";
 
 function resolvePathParam(matchParam, contacts) {
   if (!matchParam) return "";
@@ -128,10 +129,25 @@ export default function Messages() {
   useEffect(() => {
     if (!selectedEmail) return;
     loadConversation(selectedEmail, false);
-    const timer = window.setInterval(() => {
-      loadConversation(selectedEmail, true);
-    }, 5000);
-    return () => window.clearInterval(timer);
+
+    const socket = getSocket();
+    if (socket) {
+      const handleNewMessage = (newMsg) => {
+        const isFromPeer = newMsg.sender?.toLowerCase() === selectedEmail.toLowerCase();
+        const isToPeer = newMsg.receiver?.toLowerCase() === selectedEmail.toLowerCase();
+        if (isFromPeer || isToPeer) {
+          setMessages((prev) => {
+            if (prev.some((m) => m._id === newMsg._id)) return prev;
+            return [...prev, newMsg];
+          });
+        }
+      };
+
+      socket.on("newMessage", handleNewMessage);
+      return () => {
+        socket.off("newMessage", handleNewMessage);
+      };
+    }
   }, [loadConversation, selectedEmail]);
 
   useEffect(() => {

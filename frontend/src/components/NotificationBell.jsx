@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { authHeaders, API_BASE } from "../lib/config";
+import { getSocket } from "../lib/socket";
 
 export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -22,9 +23,17 @@ export default function NotificationBell() {
 
   useEffect(() => {
     fetchUnreadCount();
-    // Poll every 30 seconds for new notifications
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
+
+    const socket = getSocket();
+    if (socket) {
+      const handleNewNotif = () => {
+        setUnreadCount(prev => prev + 1);
+      };
+      socket.on("newNotification", handleNewNotif);
+      return () => {
+        socket.off("newNotification", handleNewNotif);
+      };
+    }
   }, []);
 
   return (

@@ -28,6 +28,7 @@ import Post from "./models/Post.js";
 import Comment from "./models/Comment.js";
 import Follow from "./models/Follow.js";
 import Notification from "./models/Notification.js";
+import Bookmark from "./models/Bookmark.js";
 import { isFirebaseConfigured } from "./lib/firebaseAdmin.js";
 import { sortDocs } from "./lib/firestoreModel.js";
 import { isMailerConfigured, sendEmail } from "./lib/mailer.js";
@@ -2228,7 +2229,7 @@ app.delete("/api/itinerary/:id", authenticateToken, async (req, res) => {
 async function createNotification({ recipientEmail, type, fromEmail, fromName, postId, message }) {
   try {
     if (recipientEmail.toLowerCase() === fromEmail.toLowerCase()) return;
-    await Notification.create({
+    const notif = await Notification.create({
       recipientEmail: recipientEmail.toLowerCase(),
       type,
       fromEmail: fromEmail.toLowerCase(),
@@ -2237,6 +2238,9 @@ async function createNotification({ recipientEmail, type, fromEmail, fromName, p
       message: sanitizeText(message),
       read: false
     });
+
+    // Emit Socket.IO notification event in real-time
+    io.to(userRoom(recipientEmail.toLowerCase())).emit("newNotification", notif.toObject());
   } catch (err) {
     console.error("Error creating notification:", err);
   }
@@ -2340,11 +2344,16 @@ app.get("/api/posts/feed", authenticateToken, async (req, res) => {
     const startIdx = (page - 1) * limit;
     const paginatedPosts = posts.slice(startIdx, startIdx + limit);
 
+    // Fetch bookmarks of the current user
+    const bookmarks = await Bookmark.find({ userEmail: email });
+    const bookmarkedPostIds = new Set(bookmarks.map(b => String(b.postId)));
+
     const enrichedPosts = [];
     for (const post of paginatedPosts) {
       const authorProfile = await Profile.findOne({ email: post.authorEmail });
       enrichedPosts.push({
         ...post.toObject(),
+        bookmarked: bookmarkedPostIds.has(String(post._id)),
         author: authorProfile ? {
           _id: authorProfile._id,
           firstName: authorProfile.firstName,
@@ -2383,11 +2392,17 @@ app.get("/api/posts/explore", authenticateToken, async (req, res) => {
     const startIdx = (page - 1) * limit;
     const paginatedPosts = posts.slice(startIdx, startIdx + limit);
 
+    // Fetch bookmarks of the current user
+    const myEmail = req.user.email.toLowerCase();
+    const bookmarks = await Bookmark.find({ userEmail: myEmail });
+    const bookmarkedPostIds = new Set(bookmarks.map(b => String(b.postId)));
+
     const enrichedPosts = [];
     for (const post of paginatedPosts) {
       const authorProfile = await Profile.findOne({ email: post.authorEmail });
       enrichedPosts.push({
         ...post.toObject(),
+        bookmarked: bookmarkedPostIds.has(String(post._id)),
         author: authorProfile ? {
           _id: authorProfile._id,
           firstName: authorProfile.firstName,
@@ -2442,8 +2457,12 @@ app.get("/api/posts/:id", authenticateToken, async (req, res) => {
       });
     }
 
+    // Check if the current user has bookmarked this post
+    const isBookmarked = await Bookmark.findOne({ userEmail: myEmail, postId: post._id });
+
     res.json({
       ...post.toObject(),
+      bookmarked: !!isBookmarked,
       author: authorProfile ? {
         _id: authorProfile._id,
         firstName: authorProfile.firstName,
@@ -2841,6 +2860,73 @@ app.get("/api/profile/public/:username", authenticateToken, async (req, res) => 
     });
   } catch (err) {
     console.error("Get public profile error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Bookmark a post
+app.post("/api/posts/:id/bookmark", authenticateToken, async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const myEmail = req.user.email.toLowerCase();
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const existing = await Bookmark.findOne({ userEmail: myEmail, postId });
+    if (existing) return res.json({ bookmarked: true, message: "Post already bookmarked" });
+
+    await Bookmark.create({ userEmail: myEmail, postId });
+    res.json({ bookmarked: true });
+  } catch (err) {
+    console.error("Bookmark post error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Unbookmark a post
+app.delete("/api/posts/:id/bookmark", authenticateToken, async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const myEmail = req.user.email.toLowerCase();
+    const existing = await Bookmark.findOne({ userEmail: myEmail, postId });
+    if (existing) {
+      await existing.deleteOne();
+    }
+    res.json({ bookmarked: false });
+  } catch (err) {
+    console.error("Unbookmark post error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get bookmarked posts
+app.get("/api/posts/saved", authenticateToken, async (req, res) => {
+  try {
+    const myEmail = req.user.email.toLowerCase();
+    const bookmarks = await Bookmark.find({ userEmail: myEmail });
+    const postIds = bookmarks.map(b => b.postId);
+
+    let posts = await Post.find({ _id: { $in: postIds } });
+    posts = sortDocs(posts, { createdAt: -1 });
+
+    const enrichedPosts = [];
+    for (const post of posts) {
+      const authorProfile = await Profile.findOne({ email: post.authorEmail });
+      enrichedPosts.push({
+        ...post.toObject(),
+        bookmarked: true,
+        author: authorProfile ? {
+          _id: authorProfile._id,
+          firstName: authorProfile.firstName,
+          username: authorProfile.username || authorProfile.firstName.toLowerCase(),
+          profilePhoto: authorProfile.profilePhoto
+        } : null
+      });
+    }
+
+    res.json(enrichedPosts);
+  } catch (err) {
+    console.error("Get saved posts error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

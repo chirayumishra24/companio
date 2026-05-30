@@ -221,17 +221,22 @@ export default function PublicProfile({ currentUser }) {
             )}
 
             {/* Countries & Travel details */}
-            <div className="space-y-2">
+            <div className="space-y-4 pt-4 border-t-2 border-black mt-4">
               {profile.travelCountries && profile.travelCountries.length > 0 && (
                 <div>
-                  <span className="font-black uppercase text-xs block text-gray-500 mb-1">
-                    Countries Visited
-                  </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-black uppercase text-xs text-black tracking-wider flex items-center gap-1.5">
+                      🗺️ Travel Footprint
+                    </span>
+                    <span className="bg-black text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-none border border-black">
+                      {profile.travelCountries.length} {profile.travelCountries.length === 1 ? "Country" : "Countries"}
+                    </span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {profile.travelCountries.map((c) => (
                       <span
                         key={c}
-                        className="bg-brutal-yellow text-xs font-black uppercase border border-black px-2 py-1 shadow-[1px_1px_0px_0px_#000]"
+                        className="bg-brutal-yellow text-xs font-black uppercase border-2 border-black px-3 py-1.5 shadow-[2px_2px_0px_0px_#000] hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_0px_#000] transition-all cursor-default"
                       >
                         ✈️ {c}
                       </span>
@@ -240,10 +245,10 @@ export default function PublicProfile({ currentUser }) {
                 </div>
               )}
               {profile.travelType && (
-                <div className="flex items-center space-x-2 pt-2">
-                  <span className="font-black uppercase text-xs text-gray-500">Travel Style:</span>
-                  <span className="bg-brutal-cyan text-xs font-black uppercase border border-black px-2.5 py-1">
-                    {profile.travelType}
+                <div className="flex items-center gap-2 pt-2">
+                  <span className="font-black uppercase text-xs text-black">Style:</span>
+                  <span className="bg-brutal-cyan text-xs font-black uppercase border-2 border-black px-3 py-1 shadow-[2px_2px_0px_0px_#000]">
+                    🎒 {profile.travelType}
                   </span>
                 </div>
               )}
