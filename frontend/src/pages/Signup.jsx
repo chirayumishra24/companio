@@ -36,7 +36,9 @@ export default function Signup() {
             setToken(response.data.token);
             navigate('/profile-setup');
         } catch (err) {
-            setError(err.response?.data?.message || 'Signup failed. Please try again.');
+            const payload = err.response?.data || {};
+            const details = payload.error ? `: ${payload.error}` : '';
+            setError((payload.message || 'Signup failed. Please try again.') + details);
         }
     };
 

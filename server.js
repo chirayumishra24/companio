@@ -517,7 +517,9 @@ function normalizeAiItinerary(raw, fallbackInput) {
 }
 
 function frontendRedirectUrl(originalUrl) {
-  return `${FRONTEND_URL}${originalUrl || "/"}`;
+  const base = FRONTEND_URL.replace(/\/$/, "");
+  const relPath = (originalUrl || "/").replace(/^\//, "");
+  return `${base}/${relPath}`;
 }
 
 function serveFrontendEntry(req, res) {
@@ -627,25 +629,30 @@ app.get("/auth/google/callback",
     session: false
   }),
   async (req, res) => {
-    const nextPath = sanitizeNextPath(String(req.query.state || "/matches"));
-    req.user.emailVerified = true;
-    req.user.emailVerificationTokenHash = "";
-    req.user.emailVerificationExpiresAt = null;
-    const { accessToken } = await createAuthSession(req.user, req, res);
+    try {
+      const nextPath = sanitizeNextPath(String(req.query.state || "/matches"));
+      req.user.emailVerified = true;
+      req.user.emailVerificationTokenHash = "";
+      req.user.emailVerificationExpiresAt = null;
+      const { accessToken } = await createAuthSession(req.user, req, res);
 
-    const profile = await Profile.findOne({ email: req.user.email });
+      const profile = await Profile.findOne({ email: req.user.email });
 
-    if (!req.user.passwordHash) {
-      const setPasswordPath = appendToken(`/set-password?next=${encodeURIComponent(nextPath)}`, accessToken);
-      return res.redirect(`${FRONTEND_URL}${setPasswordPath}`);
+      if (!req.user.passwordHash) {
+        const setPasswordPath = appendToken(`/set-password?next=${encodeURIComponent(nextPath)}`, accessToken);
+        return res.redirect(`${FRONTEND_URL}${setPasswordPath}`);
+      }
+
+      if (!profile) {
+        const setupPath = appendToken(`/profile-setup?next=${encodeURIComponent(nextPath)}`, accessToken);
+        return res.redirect(`${FRONTEND_URL}${setupPath}`);
+      }
+
+      res.redirect(`${FRONTEND_URL}${appendToken(nextPath, accessToken)}`);
+    } catch (err) {
+      console.error("Google OAuth callback error:", err);
+      res.redirect(`${FRONTEND_URL}/login?error=callback_error&message=${encodeURIComponent(err.message)}`);
     }
-
-    if (!profile) {
-      const setupPath = appendToken(`/profile-setup?next=${encodeURIComponent(nextPath)}`, accessToken);
-      return res.redirect(`${FRONTEND_URL}${setupPath}`);
-    }
-
-    res.redirect(`${FRONTEND_URL}${appendToken(nextPath, accessToken)}`);
   }
 );
 
@@ -1013,7 +1020,7 @@ app.post('/auth/signup', async (req, res) => {
     });
   } catch (err) {
     console.error("Signup error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 // ✅ Auth: Login
@@ -1069,7 +1076,7 @@ app.post('/auth/login', async (req, res) => {
 
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 

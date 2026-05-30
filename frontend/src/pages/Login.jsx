@@ -27,6 +27,7 @@ export default function Login() {
     const searchParams = new URLSearchParams(location.search);
     const nextPath = resolveNextPath(searchParams.get('next'));
     const oauthError = searchParams.get('error');
+    const oauthMessage = searchParams.get('message') || '';
     const verified = searchParams.get('verified');
     const resetToken = searchParams.get('resetToken') || '';
     const Motion = motion;
@@ -66,7 +67,8 @@ export default function Login() {
         } catch (err) {
             const payload = err.response?.data || {};
             setNeedsVerification(Boolean(payload.needsVerification));
-            setError(payload.message || 'Login failed. Please try again.');
+            const details = payload.error ? `: ${payload.error}` : '';
+            setError((payload.message || 'Login failed. Please try again.') + details);
         }
     };
 
@@ -183,7 +185,9 @@ export default function Login() {
                             exit={{ height: 0, opacity: 0 }}
                             className="bg-red-500 text-white font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm text-center"
                         >
-                            Google login is not configured or failed on server.
+                            {oauthError === 'oauth_not_configured'
+                                ? 'Google login is not configured.'
+                                : `Google login failed: ${oauthMessage || 'Unknown error'}`}
                         </Motion.div>
                     ) : verified === '1' ? (
                         <Motion.div
