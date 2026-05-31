@@ -23,7 +23,7 @@ import HashtagExplore from "./pages/HashtagExplore";
 import LocationExplore from "./pages/LocationExplore";
 import { API_BASE, clearToken, getToken, setToken, authHeaders } from "./lib/config";
 
-const navLinkClass = "neo-btn py-2 px-4 shadow-brutal-sm text-sm border-2 font-bold uppercase transition-all hover:bg-black hover:text-white";
+const navLinkClass = "px-4 py-1.5 font-semibold text-sm transition-all rounded-lg text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100/60 flex items-center justify-center";
 
 function App() {
   const location = useLocation();
@@ -85,47 +85,47 @@ function App() {
 
   return (
     <div className="min-h-screen bg-brutal-bg">
-      <nav className="border-b-4 border-black bg-brutal-yellow/95 backdrop-blur-sm p-4 sticky top-0 z-50 shadow-[0_4px_0_0_rgba(0,0,0,1)]">
+      <nav className="border-b border-zinc-100 bg-white/80 backdrop-blur-md py-3.5 px-4 sticky top-0 z-50 shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <Link to="/" className="text-3xl font-black tracking-tighter hover:-translate-y-1 transition-transform inline-block">
-            COMPANIO.
+          <Link to="/" className="text-xl font-bold tracking-tight text-zinc-900 hover:opacity-85 transition-opacity">
+            Companio.
           </Link>
 
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
-            className="md:hidden neo-btn bg-white px-3 py-2 text-xs"
+            className="md:hidden px-3 py-1.5 border border-zinc-200 rounded-lg text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
             aria-label="Toggle navigation"
           >
-            MENU
+            Menu
           </button>
 
           <div className={`${mobileOpen ? "flex" : "hidden"} w-full md:w-auto md:flex items-center gap-2 md:gap-3 flex-col md:flex-row`}>
-            <Link to="/" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>
+            <Link to="/" onClick={() => setMobileOpen(false)} className={navLinkClass}>
               {isAuthenticated ? "Feed" : "Home"}
             </Link>
             {isAuthenticated ? (
               <>
-                <Link to="/explore" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-cyan text-center`}>Explore</Link>
-                <Link to="/create" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-green text-center`}>Create (+)</Link>
-                <Link to="/saved" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-yellow text-center`}>Saved</Link>
-                <Link to="/messages" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>Messages</Link>
-                <Link to="/itinerary-assistant" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>AI Trip</Link>
-                <Link to="/profile" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-purple text-white text-center`}>Profile</Link>
+                <Link to="/explore" onClick={() => setMobileOpen(false)} className={navLinkClass}>Explore</Link>
+                <Link to="/create" onClick={() => setMobileOpen(false)} className={navLinkClass}>Create (+)</Link>
+                <Link to="/saved" onClick={() => setMobileOpen(false)} className={navLinkClass}>Saved</Link>
+                <Link to="/messages" onClick={() => setMobileOpen(false)} className={navLinkClass}>Messages</Link>
+                <Link to="/itinerary-assistant" onClick={() => setMobileOpen(false)} className="px-4 py-1.5 font-bold text-sm text-rose-600 bg-rose-50 hover:bg-rose-100/80 transition-all rounded-lg flex items-center justify-center">AI Trip</Link>
+                <Link to="/profile" onClick={() => setMobileOpen(false)} className={navLinkClass}>Profile</Link>
                 
                 {/* Notification Bell */}
                 <div onClick={() => setMobileOpen(false)} className="self-stretch flex justify-center items-center">
                   <NotificationBell />
                 </div>
 
-                <button type="button" onClick={logout} className={`${navLinkClass} bg-black text-white text-center w-full md:w-auto`}>
-                  LOGOUT
+                <button type="button" onClick={logout} className="px-4 py-1.5 font-semibold text-sm text-red-600 hover:bg-red-50 transition-all rounded-lg flex items-center justify-center w-full md:w-auto">
+                  Logout
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-white text-center`}>LOGIN</Link>
-                <Link to="/signup" onClick={() => setMobileOpen(false)} className={`${navLinkClass} bg-brutal-pink text-white text-center`}>SIGNUP</Link>
+                <Link to="/login" onClick={() => setMobileOpen(false)} className="px-4 py-1.5 font-semibold text-sm text-zinc-700 hover:text-zinc-950 transition-all rounded-lg flex items-center justify-center">Login</Link>
+                <Link to="/signup" onClick={() => setMobileOpen(false)} className="px-4 py-1.5 font-bold text-sm text-white bg-zinc-900 hover:bg-zinc-800 transition-all rounded-lg flex items-center justify-center shadow-sm">Sign Up</Link>
               </>
             )}
           </div>

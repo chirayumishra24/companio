@@ -7,17 +7,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        'brutal-yellow': '#FFD000',
-        'brutal-pink': '#FF499E',
-        'brutal-cyan': '#00E5FF',
-        'brutal-green': '#00FF66',
-        'brutal-purple': '#A64AFF',
-        'brutal-bg': '#FDFCF0',
+        'brutal-yellow': '#F4F4F5',
+        'brutal-pink': '#E11D48',
+        'brutal-cyan': '#0284C7',
+        'brutal-green': '#10B981',
+        'brutal-purple': '#6366F1',
+        'brutal-bg': '#FAFAFA',
       },
       boxShadow: {
-        'brutal': '4px 4px 0px 0px rgba(0,0,0,1)',
-        'brutal-lg': '8px 8px 0px 0px rgba(0,0,0,1)',
-        'brutal-sm': '2px 2px 0px 0px rgba(0,0,0,1)',
+        'brutal': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+        'brutal-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05)',
+        'brutal-sm': '0 1px 2px 0 rgba(0, 0, 0, 0.02)',
       }
     },
   },

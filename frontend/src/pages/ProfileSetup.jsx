@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE, authHeaders, getToken, setToken } from '../lib/config';
@@ -21,9 +21,17 @@ export default function ProfileSetup() {
         bio: ''
     });
     const [photos, setPhotos] = useState([]);
+    const [previewUrl, setPreviewUrl] = useState('');
     const [usernameStatus, setUsernameStatus] = useState({ loading: false, available: true, message: "" });
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const fileInputRef = useRef(null);
+
+    const triggerFileSelect = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -39,6 +47,12 @@ export default function ProfileSetup() {
             window.history.replaceState({}, "", "/profile-setup");
         }
     }, []);
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        };
+    }, [previewUrl]);
 
     // Username checking effect (debounce 500ms)
     useEffect(() => {
@@ -81,7 +95,13 @@ export default function ProfileSetup() {
     };
 
     const handleFileChange = (e) => {
-        setPhotos(e.target.files);
+        const files = e.target.files;
+        setPhotos(files);
+        if (files && files[0]) {
+            setPreviewUrl(URL.createObjectURL(files[0]));
+        } else {
+            setPreviewUrl('');
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -120,17 +140,53 @@ export default function ProfileSetup() {
     return (
         <div className="min-h-screen bg-brutal-bg p-8 flex justify-center items-start">
             <div className="w-full max-w-2xl">
-                <h1 className="text-5xl font-black uppercase mb-8 border-b-8 border-black pb-4 inline-block bg-brutal-pink px-4 rotate-1 shadow-brutal">
-                    Complete Your Vibe
+                <h1 className="text-3xl font-extrabold text-zinc-900 mb-2">
+                    Complete Your Profile
                 </h1>
+                <p className="text-zinc-500 mb-8">Tell us about yourself to match with other travelers.</p>
 
                 {error && (
-                    <div className="bg-red-500 text-white font-bold p-3 border-4 border-black mb-6 shadow-brutal-sm">
+                    <div className="bg-red-50 text-red-600 font-semibold p-4 rounded-xl border border-red-100 mb-6 text-sm">
                         {error}
                     </div>
                 )}
 
                 <form onSubmit={handleSubmit} className="neo-card bg-white mt-8 space-y-6 p-6 border-4 border-black shadow-[8px_8px_0px_0px_#000]">
+                    
+                    {/* Centered Instagram-style Profile Picture Upload */}
+                    <div className="flex flex-col items-center justify-center py-4 border-b-2 border-black/10">
+                        <div 
+                            onClick={triggerFileSelect}
+                            className="w-28 h-28 rounded-full border-4 border-black overflow-hidden bg-gray-100 shadow-[4px_4px_0px_0px_#000] cursor-pointer hover:opacity-90 active:scale-95 transition-all relative group"
+                        >
+                            {previewUrl ? (
+                                <img src={previewUrl} alt="Profile Preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                                    <svg className="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                    </svg>
+                                </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-white text-xs font-black uppercase text-center px-2">Upload</span>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={triggerFileSelect}
+                            className="mt-3 text-sm font-black uppercase text-brutal-pink hover:text-black transition-colors"
+                        >
+                            Change Profile Photo
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                        />
+                    </div>
                     
                     <div>
                         <label className="block text-xl font-black uppercase mb-2">First Name</label>
@@ -233,11 +289,8 @@ export default function ProfileSetup() {
                         />
                     </div>
 
-                    <div className="bg-brutal-yellow p-4 border-4 border-black shadow-[4px_4px_0px_0px_#000]">
-                        <label className="block text-xl font-black uppercase mb-2">Photos (Up to 6)</label>
-                        <input type="file" multiple accept="image/*" onChange={handleFileChange} className="font-bold border-2 border-black p-2 bg-white w-full cursor-pointer" />
-                        <p className="text-xs font-black uppercase mt-1 text-gray-700">First image will also serve as your Profile Banner!</p>
-                    </div>
+
+                    
 
                     <button type="submit" className="neo-btn bg-brutal-cyan text-2xl w-full mt-8 uppercase tracking-widest border-4 border-black py-3 font-black shadow-[4px_4px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all hover:bg-black hover:text-white">
                         Save Profile
